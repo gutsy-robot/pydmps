@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
 from pydmps.dmp import DMPs
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -114,12 +114,15 @@ class DMPs_discrete(DMPs):
 # ==============================
 # Test code
 # ==============================
+
+
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
 
     # test normal run
     dmp = DMPs_discrete(dt=.05, n_dmps=1, n_bfs=10, w=np.zeros((1, 10)))
     y_track, dy_track, ddy_track = dmp.rollout()
+    print("after initial rollout..")
+    print(y_track, dy_track, ddy_track)
 
     plt.figure(1, figsize=(6, 3))
     plt.plot(np.ones(len(y_track))*dmp.goal, 'r--', lw=2)

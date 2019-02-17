@@ -1,4 +1,4 @@
-'''
+"""
 Copyright (C) 2013 Travis DeWolf
 
 This program is free software: you can redistribute it and/or modify
@@ -13,20 +13,28 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-'''
-import numpy as np
 
+"""
+
+import numpy as np
 from pydmps.cs import CanonicalSystem
+import scipy.interpolate
+import matplotlib.pyplot as plt
 
 
 class DMPs(object):
-    """Implementation of Dynamic Motor Primitives,
-    as described in Dr. Stefan Schaal's (2002) paper."""
+    """
+
+    Implementation of Dynamic Motor Primitives,
+    as described in Dr. Stefan Schaal's (2002) paper.
+
+    """
 
     def __init__(self, n_dmps, n_bfs, dt=.01,
                  y0=0, goal=1, w=None,
                  ay=None, by=None, **kwargs):
         """
+
         n_dmps int: number of dynamic motor primitives
         n_bfs int: number of basis functions per DMP
         dt float: timestep for simulation
@@ -35,6 +43,7 @@ class DMPs(object):
         w list: tunable parameters, control amplitude of basis functions
         ay int: gain on attractor term y dynamics
         by int: gain on attractor term y dynamics
+
         """
 
         self.n_dmps = n_dmps
@@ -45,6 +54,8 @@ class DMPs(object):
         self.y0 = y0
         if isinstance(goal, (int, float)):
             goal = np.ones(self.n_dmps)*goal
+
+        # ideally pass non-int/non-float goal state.
         self.goal = goal
         if w is None:
             # default is f = 0
@@ -62,8 +73,12 @@ class DMPs(object):
         self.reset_state()
 
     def check_offset(self):
-        """Check to see if initial position and goal are the same
-        if they are, offset slightly so that the forcing term is not 0"""
+        """
+
+        Check to see if initial position and goal are the same
+        if they are, offset slightly so that the forcing term is not 0
+
+        """
 
         for d in range(self.n_dmps):
             if (self.y0[d] == self.goal[d]):
@@ -82,7 +97,9 @@ class DMPs(object):
         raise NotImplementedError()
 
     def imitate_path(self, y_des, plot=False):
-        """Takes in a desired trajectory and generates the set of
+        """
+
+        Takes in a desired trajectory and generates the set of
         system parameters that best realize this path.
 
         y_des list/array: the desired trajectories of each DMP
@@ -92,14 +109,14 @@ class DMPs(object):
         # set initial state and goal
         if y_des.ndim == 1:
             y_des = y_des.reshape(1, len(y_des))
+
         self.y0 = y_des[:, 0].copy()
         self.y_des = y_des.copy()
-        self.goal = self.gen_goal(y_des)
+        self.goal = self.gen_goal(y_des)        # Just returns the last element of the list in rhythmic case.
 
         self.check_offset()
 
         # generate function to interpolate the desired trajectory
-        import scipy.interpolate
         path = np.zeros((self.n_dmps, self.timesteps))
         x = np.linspace(0, self.cs.run_time, y_des.shape[1])
         for d in range(self.n_dmps):
@@ -130,7 +147,6 @@ class DMPs(object):
 
         if plot is True:
             # plot the basis function activations
-            import matplotlib.pyplot as plt
             plt.figure()
             plt.subplot(211)
             psi_track = self.gen_psi(self.cs.rollout())
@@ -139,7 +155,7 @@ class DMPs(object):
 
             # plot the desired forcing function vs approx
             plt.subplot(212)
-            plt.plot(f_target[:,0])
+            plt.plot(f_target[:, 0])
             plt.plot(np.sum(psi_track * self.w[0], axis=1) * self.dt)
             plt.legend(['f_target', 'w*psi'])
             plt.title('DMP forcing function')
@@ -150,7 +166,12 @@ class DMPs(object):
         return y_des
 
     def rollout(self, timesteps=None, **kwargs):
-        """Generate a system trial, no feedback is incorporated."""
+
+        """
+
+        Generate a system trial, no feedback is incorporated.
+
+        """
 
         self.reset_state()
 

@@ -1,4 +1,5 @@
-'''
+"""
+
 Copyright (C) 2013 Travis DeWolf
 
 This program is free software: you can redistribute it and/or modify
@@ -13,13 +14,21 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-'''
+
+"""
 
 import numpy as np
+import matplotlib.pyplot as plt
 
-class CanonicalSystem():
-    """Implementation of the canonical dynamical system
-    as described in Dr. Stefan Schaal's (2002) paper"""
+
+class CanonicalSystem:
+
+    """
+
+    Implementation of the canonical dynamical system
+    as described in Dr. Stefan Schaal's (2002) paper
+
+    """
 
     def __init__(self, dt, ax=1.0, pattern='discrete'):
         """Default values from Schaal (2012)
@@ -47,12 +56,20 @@ class CanonicalSystem():
         self.reset_state()
 
     def rollout(self, **kwargs):
-        """Generate x for open loop movements.
+
         """
+        Generate x for open loop movements.
+
+        """
+        # tau is for temporal scaling in the Dynamic Motion Primitive.
+        # this is basically initiates from x being 1 and takes a step as per the step_discrete/rhythmic.
+
         if 'tau' in kwargs:
             timesteps = int(self.timesteps / kwargs['tau'])
+
         else:
             timesteps = self.timesteps
+
         self.x_track = np.zeros(timesteps)
 
         self.reset_state()
@@ -63,44 +80,66 @@ class CanonicalSystem():
         return self.x_track
 
     def reset_state(self):
-        """Reset the system state"""
+        """
+        Reset the system state
+
+        """
+        # x decays from 1 to 0 as given in the equation formulation of the DMP. So reset to 1 function.
+
         self.x = 1.0
 
     def step_discrete(self, tau=1.0, error_coupling=1.0):
-        """Generate a single step of x for discrete
+
+        """
+        Generate a single step of x for discrete
         (potentially closed) loop movements.
         Decaying from 1 to 0 according to dx = -ax*x.
 
         tau float: gain on execution time
                    increase tau to make the system execute faster
         error_coupling float: slow down if the error is > 1
+
         """
+        # goes from the equation for the first derivative of x.
+
         self.x += (-self.ax * self.x * error_coupling) * tau * self.dt
         return self.x
 
     def step_rhythmic(self, tau=1.0, error_coupling=1.0):
-        """Generate a single step of x for rhythmic
+        """
+
+        Generate a single step of x for rhythmic
         closed loop movements. Decaying from 1 to 0
         according to dx = -ax*x.
 
         tau float: gain on execution time
                    increase tau to make the system execute faster
         error_coupling float: slow down if the error is > 1
+
         """
         self.x += (1 * error_coupling * tau) * self.dt
         return self.x
 
 
 #==============================
+
+
 # Test code
+
+
 #==============================
+
+
 if __name__ == "__main__":
 
     cs = CanonicalSystem(dt=.001, pattern='discrete')
     # test normal rollout
     x_track1 = cs.rollout()
+    print("printing after calling rollout ...")
+    print("x_track1 is: ", x_track1)
 
     cs.reset_state()
+
     # test error coupling
     timesteps = int(1.0/.001)
     x_track2 = np.zeros(timesteps)
@@ -110,8 +149,7 @@ if __name__ == "__main__":
     for i in range(timesteps):
         x_track2[i] = cs.step(error_coupling=err_coup[i])
 
-    import matplotlib.pyplot as plt
-    fig, ax1 = plt.subplots(figsize=(6,3))
+    fig, ax1 = plt.subplots(figsize=(6, 3))
     ax1.plot(x_track1, lw=2)
     ax1.plot(x_track2, lw=2)
     plt.grid()
@@ -129,16 +167,15 @@ if __name__ == "__main__":
 
     plt.tight_layout()
 
-    cs = CanonicalSystem(dt=.001, pattern='rhythmic')
-    # test normal rollout
-    x_track1 = cs.rollout()
-
-    import matplotlib.pyplot as plt
-    fig, ax1 = plt.subplots(figsize=(6,3))
-    ax1.plot(x_track1, lw=2)
-    plt.grid()
-    plt.legend(['normal rollout'], loc='lower right')
-    plt.xlabel('time (s)')
-    plt.ylabel('x')
-    plt.title('Canonical system - rhythmic')
+    # cs = CanonicalSystem(dt=.001, pattern='rhythmic')
+    # # test normal rollout
+    # x_track1 = cs.rollout()
+    #
+    # fig, ax1 = plt.subplots(figsize=(6, 3))
+    # ax1.plot(x_track1, lw=2)
+    # plt.grid()
+    # plt.legend(['normal rollout'], loc='lower right')
+    # plt.xlabel('time (s)')
+    # plt.ylabel('x')
+    # plt.title('Canonical system - rhythmic')
     plt.show()
