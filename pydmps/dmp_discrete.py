@@ -1,4 +1,7 @@
-'''
+#!/usr/bin/env python
+
+"""
+
 Copyright (C) 2013 Travis DeWolf
 
 This program is free software: you can redistribute it and/or modify
@@ -13,7 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-'''
+
+"""
 
 from pydmps.dmp import DMPs
 import matplotlib.pyplot as plt
@@ -21,13 +25,15 @@ import numpy as np
 
 
 class DMPs_discrete(DMPs):
-    """An implementation of discrete DMPs"""
+
+    """
+    An implementation of discrete DMPs
+
+    """
 
     def __init__(self, **kwargs):
-        """
-        """
-
         # call super class constructor
+
         super(DMPs_discrete, self).__init__(pattern='discrete', **kwargs)
 
         self.gen_centers()
@@ -112,7 +118,9 @@ class DMPs_discrete(DMPs):
         self.w = np.nan_to_num(self.w)
 
 # ==============================
+
 # Test code
+
 # ==============================
 
 

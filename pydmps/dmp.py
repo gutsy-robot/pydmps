@@ -201,11 +201,14 @@ class DMPs(object):
         self.cs.reset_state()
 
     def step(self, tau=1.0, error=0.0, external_force=None):
-        """Run the DMP system for a single timestep.
+        """
+
+        Run the DMP system for a single timestep.
 
         tau float: scales the timestep
                    increase tau to make the system execute faster
         error float: optional system feedback
+
         """
 
         error_coupling = 1.0 / (1.0 + error)
