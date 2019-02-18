@@ -21,13 +21,21 @@ Make sure that both of these are present on your ROS package path.
 Running the demo
 ----------------
 
-    roslauch pydmps record_trajectory.launch <name_of_bag_file> <name_of_csv_file>
+    roslauch pydmps record_trajectory.launch
     
     
-This will open the turtlesim simulator and the teleoperation node. You can specify the name of the bag file and the csv file as atguments.
-Once the simulator is up, move around the robot to record a trajectory. Once you're done, go to the pydmps directory inside the package and do:
+This will open the turtlesim simulator and the teleoperation node. Go to the bag directory of the package and do:
     
-       python imitate_path.py <path_to_csv> <start_state> <goal_state>
+    rosbag record turtle1/pose -o <name_of_bag_file>
+
+
+Now move the turtle around by switching back to the previous tab of the terminal, so that the trajectory gets recorded in the bag.
+Once you're done kill the nodes in both of the terminals.
+
+
+Once you're done, go to the pydmps directory inside the package and do:
+    
+       python imitate_turtlesim.sh <path_to_bag_file>
        
        
 You should now be able to see the DMPs with the different number of basis alongside the original path.
