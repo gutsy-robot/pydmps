@@ -173,7 +173,9 @@ class DMPs(object):
 
         """
 
+        # print("rollout called..")
         self.reset_state()
+        # print("reset state done..")
 
         if timesteps is None:
             if 'tau' in kwargs:
@@ -189,6 +191,7 @@ class DMPs(object):
         for t in range(timesteps):
 
             # run and record timestep
+            # print("kwargs are: ", kwargs)
             y_track[t], dy_track[t], ddy_track[t] = self.step(**kwargs)
 
         return y_track, dy_track, ddy_track
@@ -200,7 +203,7 @@ class DMPs(object):
         self.ddy = np.zeros(self.n_dmps)
         self.cs.reset_state()
 
-    def step(self, tau=1.0, error=0.0, external_force=None):
+    def step(self, tau=1.0, error=0.0, external_force=None, obstacles=None):
         """
 
         Run the DMP system for a single timestep.
@@ -210,7 +213,7 @@ class DMPs(object):
         error float: optional system feedback
 
         """
-
+        # print("step called..")
         error_coupling = 1.0 / (1.0 + error)
         # run canonical system
         x = self.cs.step(tau=tau, error_coupling=error_coupling)
@@ -229,7 +232,9 @@ class DMPs(object):
                            (self.by[d] * (self.goal[d] - self.y[d]) -
                            self.dy[d]/tau) + f) * tau
             if external_force is not None:
-                self.ddy[d] += external_force[d]
+                # print("external force is not None")
+                # print("external force is: ", external_force)
+                self.ddy[d] += external_force(self.y, self.dy, self.goal, obstacles)[d]
             self.dy[d] += self.ddy[d] * tau * self.dt * error_coupling
             self.y[d] += self.dy[d] * self.dt * error_coupling
 
