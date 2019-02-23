@@ -13,3 +13,5 @@ path_x, path_y = get_trajectory("../csv/data.csv")
 
 plot_path(path_x, path_y, start=[3, 6], goal=[5, 10])
 
+
+
