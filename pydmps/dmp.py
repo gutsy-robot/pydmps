@@ -187,14 +187,15 @@ class DMPs(object):
         y_track = np.zeros((timesteps, self.n_dmps))
         dy_track = np.zeros((timesteps, self.n_dmps))
         ddy_track = np.zeros((timesteps, self.n_dmps))
-
+        obst_closest_pts_list= []
         for t in range(timesteps):
 
             # run and record timestep
             # print("kwargs are: ", kwargs)
-            y_track[t], dy_track[t], ddy_track[t] = self.step(**kwargs)
+            y_track[t], dy_track[t], ddy_track[t], obst_closest_pts = self.step(**kwargs)
+            obst_closest_pts_list.append(obst_closest_pts)
 
-        return y_track, dy_track, ddy_track
+        return y_track, dy_track, ddy_track, obst_closest_pts_list
 
     def reset_state(self):
         """Reset the system state"""
@@ -203,7 +204,7 @@ class DMPs(object):
         self.ddy = np.zeros(self.n_dmps)
         self.cs.reset_state()
 
-    def step(self, tau=1.0, error=0.0, external_force=None, obstacles=None):
+    def step(self, tau=1.0, error=0.0, external_force=None, obstacles=None, gamma=10):
         """
 
         Run the DMP system for a single timestep.
@@ -231,11 +232,16 @@ class DMPs(object):
             self.ddy[d] = (self.ay[d] *
                            (self.by[d] * (self.goal[d] - self.y[d]) -
                            self.dy[d]/tau) + f) * tau
+
+            obst_closest_pts = None
             if external_force is not None:
                 # print("external force is not None")
                 # print("external force is: ", external_force)
-                self.ddy[d] += external_force(self.y, self.dy, self.goal, obstacles)[d]
+                temp = external_force(self.y, self.dy, self.goal, obstacles, gamma)
+                self.ddy[d] += temp[0][d]
+                obst_closest_pts = temp[1]
+
             self.dy[d] += self.ddy[d] * tau * self.dt * error_coupling
             self.y[d] += self.dy[d] * self.dt * error_coupling
 
-        return self.y, self.dy, self.ddy
+        return self.y, self.dy, self.ddy, obst_closest_pts

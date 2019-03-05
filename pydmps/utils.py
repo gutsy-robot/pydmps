@@ -4,7 +4,7 @@ from dmp_discrete import DMPs_discrete
 import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry.polygon import LinearRing, Polygon
-from shapely.geometry import Point
+from shapely.geometry import Point, mapping
 
 
 def get_trajectory(csvfile):
@@ -44,10 +44,12 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
 
     """
 
+    print("plot_paths called for obstacles: ", obstacles)
     # plot given path for visualisation.
-
+    legend_key = []
     orig_path,  = plt.plot(x, y, '--', linewidth=2)
     plot_paths = [orig_path]
+    legend_key.append('original')
     plt.plot(x[0], y[0], 'bo')
     plt.annotate("st. original", (x[0], y[0]))
     plt.plot(x[-1], y[-1], 'bo')
@@ -58,30 +60,8 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
     plt.plot(goal[0], goal[1], 'bo')
     plt.annotate("new_fin", (goal[0], goal[1]))
 
-    # for ii, bfs in enumerate(n_bfs):
-    #     dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs)
-    #
-    #     dmp.imitate_path(y_des=np.array([x, y]))
-    #     dmp.y0[0] = start[0]
-    #     dmp.y0[1] = start[1]
-    #     # change the scale of the movement
-    #
-    #
-    #     dmp.goal[0] = goal[0]
-    #     dmp.goal[1] = goal[1]
-    #
-    #     y_track, dy_track, ddy_track = dmp.rollout()
-    #
-    #     print("shape of y_track is: ", y_track.shape)
-    #     # print("f original.", (goal[0], goal[1]))
-    #     # print("the end pt is: ", (y_track[:, 0][-1], y_track[:, 1][-1]))
-    #     plot, = plt.plot(y_track[:, 0], y_track[:, 1])
-    #     plot_paths.append(plot)
-
-    # plt.legend(plot_paths, ['original_path'] + ['%i BFs' % i for i in n_bfs], loc='lower right')
-
     for ii, bfs in enumerate(n_bfs):
-        dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs)
+        dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs, dt=0.01)
 
         dmp.imitate_path(y_des=np.array([x, y]))
         dmp.y0[0] = start[0]
@@ -90,14 +70,9 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
         # change the scale of the movement
 
         # TODO: apply goal_check and goal_alteration
-        # if obstacles != None:
-        # dmp.goal[0], dmp.goal[1] = check_goal(goal)
-
         dmp.goal[0] = goal[0]
         dmp.goal[1] = goal[1]
-        # print(dmp.y, dmp.dy)
 
-        # TODO: code for plotting shapely polygons.
         for obstacle in obstacles:
             x, y = obstacle.exterior.xy
             plt.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
@@ -118,40 +93,63 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
         # plt.plot(4.0, 8.0, 'bo')
         # plt.annotate("obstacle2", (4.0, 8.0))
 
-        y_track_nc, dy_track_nc, ddy_track_nc = dmp.rollout()
+        y_track_nc, dy_track_nc, ddy_track_nc, s  = dmp.rollout()
         plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
         plot_paths.append(plot)
+        legend_key.append('no_avoidance')
+        for i in range(0, len(y_track_nc)):
+            plt.plot(y_track_nc[i][0], y_track_nc[i][1], 'bo')
 
-        path_intersect = False
         path_points = []
         for point in y_track_nc:
             path_points.append(Point(tuple(point)))
 
-        for obs in obstacles:
-            for point in path_points:
-                if obs.contains(point):
-                    path_intersect = True
+        path_intersect = check_collision(path_points, obstacles)
+
+        gammas = np.linspace(1.0, 200.0, 100)
+        # print("gammas are: ", gammas)
+        if path_intersect:
+            print("Initial path intersects, searching for gamma...")
+            for gamma in gammas:
+                print("trying gamma= ", gamma)
+                y_track, dy_track, ddy_track, obst_closest_pts = dmp.rollout(external_force=avoid_obstacles,
+                                                                             obstacles=obstacles, gamma=gamma)
+                # plot, = plt.plot(y_track[:, 0], y_track[:, 1])
+                # plot_paths.append(plot)
+                path_points = [Point(tuple(x)) for x in y_track]
+                collision = check_collision(path_points, obstacles)
+                # legend_key.append('gamma= ' + str(gamma))
+                if collision == False:
+                    print("no collision for gamma: ", gamma)
+                    print("dimension of y_track is: ", y_track.shape)
+                    plot, = plt.plot(y_track[:, 0], y_track[:, 1])
+                    plot_paths.append(plot)
+                    legend_key.append('gamma= ' + str(gamma))
+                    for i in range(0, len(y_track)):
+                        plt.plot(y_track[i][0], y_track[i][1], 'bo')
+                        for pts in obst_closest_pts[i]:
+                            print("pts are: ", pts)
+                            plt.plot(pts[0], pts[1], 'bo')
+                            # plt.plot(pts[1][0], pts[1][1], 'bo')
+                            plt.plot([y_track[i][0], pts[0]], [y_track[i][1], pts[1]], '--', linewidth=0.5)
+
                     break
 
                 else:
-                    continue
-
-                break
-
-        if path_intersect:
-            y_track, dy_track, ddy_track = dmp.rollout(external_force=avoid_obstacles, obstacles=obstacles)
+                    print("collision occured for gamma= ", gamma)
 
         else:
-            y_track, dy_track, ddy_track = dmp.rollout(external_force=avoid_obstacles, obstacles=obstacles)
+            y_track, dy_track, ddy_track = dmp.rollout()
 
-        plot, = plt.plot(y_track[:, 0], y_track[:, 1])
-        plot_paths.append(plot)
+            plot, = plt.plot(y_track[:, 0], y_track[:, 1])
+            plot_paths.append(plot)
+            legend_key.append('with_obstacles')
 
-    plt.legend(plot_paths, ['original_path', 'DMP', 'DMP_obstacle'], loc='lower right')
+    plt.legend(plot_paths, legend_key, loc='lower right')
     plt.show()
 
 
-def avoid_obstacles(y, dy, goal, obstacles, beta=20.0 / np.pi, gamma=10):
+def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
 
     """
 
@@ -164,17 +162,18 @@ def avoid_obstacles(y, dy, goal, obstacles, beta=20.0 / np.pi, gamma=10):
     :return:
     """
 
+    # print("gamma is: ", gamma)
     # print("avoid obstacles called..")
 
     R_halfpi = np.array([[np.cos(np.pi / 2.0), -np.sin(np.pi / 2.0)],
                          [np.sin(np.pi / 2.0), np.cos(np.pi / 2.0)]])
-
+    obst_closest_pts = []
     pot = np.zeros(2)
     # print("y is: ", y)
     # print("dy is: ", dy)
-    for obstacle in obstacles:
+    for i in range(0, len(obstacles)):
         # based on (Hoffmann, 2009)
-
+        obstacle = obstacles[i]
         # if we're moving
         if np.linalg.norm(dy) > 1e-5:
             # print("obstacle force will be non-zero..")
@@ -186,15 +185,14 @@ def avoid_obstacles(y, dy, goal, obstacles, beta=20.0 / np.pi, gamma=10):
                              [np.sin(phi_dy), np.cos(phi_dy)]])
 
             # calculate vector to object relative to body
-            # TODO: Change obj vector by determining the closest to shapely polygon
-            # TODO:  obs = closest_pt(obstacle, y)
 
             pol_ext = LinearRing(obstacle.exterior.coords)
             d = pol_ext.project(Point(tuple(y)))
             p = pol_ext.interpolate(d)
             obst_potential_pt = list(p.coords)[0]
-            print("closest pt to the obstacle is: ", obst_potential_pt)
-
+            # print("closest pt to the obstacle is: ", obst_potential_pt)
+            obst_closest_pts.append(obst_potential_pt)
+            # print("appended point is: ", obst_potential_pt)
             obj_vec = obst_potential_pt - y
             # rotate it by the direction we're going
             obj_vec = np.dot(R_dy, obj_vec)
@@ -205,7 +203,7 @@ def avoid_obstacles(y, dy, goal, obstacles, beta=20.0 / np.pi, gamma=10):
             R = np.dot(R_halfpi, np.outer(obst_potential_pt - y, dy))
             pval = -np.nan_to_num(np.dot(R, dy) * dphi)
 
-            print("pval is: ", pval)
+            # print("pval is: ", pval)
 
             # check to see if the distance to the obstacle is further than
             # the distance to the target, if it is, ignore the obstacle
@@ -214,7 +212,32 @@ def avoid_obstacles(y, dy, goal, obstacles, beta=20.0 / np.pi, gamma=10):
 
             pot += pval
     # print("p is: ", p)
-    return pot
+    # print("returned obst_closest_pts are: ", obst_closest_pts)
+    return pot, obst_closest_pts
 
-# TODO: Check for collision method.
-# def check_collision(traj, obstacles)
+
+def check_collision(path_points, obstacles):
+
+    """
+
+    :param path_points: list of shapely points
+    :param obstacles: list of shapely polygons
+    :return: boolean collision
+    """
+    collision = False
+
+    for obs in obstacles:
+        x, y = obs.exterior.coords.xy
+        print("checking for obstacle: ", mapping(obs)['coordinates'])
+        for point in path_points:
+            if obs.contains(point):
+                collision = True
+                print("pt: " + str(point) + " lies inside the obstacle")
+                break
+
+            else:
+                continue
+
+            break
+
+    return collision
