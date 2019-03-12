@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import math
 from shapely.geometry.polygon import LinearRing, Polygon
 from shapely.geometry import Point, mapping
-
+import time
 
 show_animation = True
 
@@ -26,7 +26,6 @@ class Node(object):
 
 def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
     """
-
     :param sx: start x coordinate
     :param sy: start y coordinate
     :param gx: goal x coordinate
@@ -44,12 +43,16 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
 
     obmap, minx, miny, maxx, maxy, xw, yw = calc_obstacle_map(obstacles, reso)
 
+    print("obmap is: ", obmap)
+
     motion = get_motion_model()
 
     openset, closedset = dict(), dict()
     openset[calc_index(nstart, xw, minx, miny)] = nstart
 
     while 1:
+        print("start of while loop")
+        # time.sleep(3.0)
         c_id = min(openset, key=lambda o: openset[o].cost)
         current = openset[c_id]
         #  print("current", current)
@@ -97,6 +100,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
 
 def calc_final_path(ngoal, closedset, reso):
     # generate final course
+    print("calculate final path")
     rx, ry = [ngoal.x * reso], [ngoal.y * reso]
     pind = ngoal.pind
     while pind != -1:
@@ -105,6 +109,11 @@ def calc_final_path(ngoal, closedset, reso):
         ry.append(n.y * reso)
         pind = n.pind
 
+    print("final path calculated..")
+    print("rx is: ", rx)
+    print("ry is: ", ry)
+    # plt.plot(rx, ry, 'r')
+    # print("plot command executed")
     return rx, ry
 
 
@@ -130,8 +139,8 @@ def calc_obstacle_map(obstacles, reso):
 
     minx = 0
     miny = 0
-    maxx = 14
-    maxy = 14
+    maxx = 100
+    maxy = 100
     #  print("minx:", minx)
     #  print("miny:", miny)
     #  print("maxx:", maxx)
@@ -186,13 +195,13 @@ def main():
     gy = 50.0  # [m]
     grid_size = 1.0  # [m]
 
-    coords = [(6.0, 2.0), (6.0, 6.0), (8.0, 6.0), (8.0, 2.0)]
+    coords = [(36.0, 20.0), (36.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
     poly1 = Polygon(coords)
 
-    coords2 = [(6.0, 6.5), (6.0, 8.0), (8.0, 8.0), (8.0, 6.5)]
-    poly2 = Polygon(coords2)
+    # coords2 = [(6.0, 6.5), (6.0, 8.0), (8.0, 8.0), (8.0, 6.5)]
+    # poly2 = Polygon(coords2)
 
-    obstacles = [poly1, poly2]
+    obstacles = [poly1]
 
     if show_animation:
         # plt.plot(ox, oy, ".k")
