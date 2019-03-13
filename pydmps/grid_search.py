@@ -7,24 +7,29 @@ import matplotlib.pyplot as plt
 import math
 from shapely.geometry.polygon import LinearRing, Polygon
 from shapely.geometry import Point, mapping
-import time
+from math import sqrt, ceil
+from utils import get_trajectory, check_collision, avoid_obstacles
+from dmp_discrete import DMPs_discrete
+import numpy as np
 
 show_animation = True
 
 
 class Node(object):
 
-    def __init__(self, x, y, cost, pind):
+    def __init__(self, x, y, cost, pind, time=0.0):
         self.x = x
         self.y = y
         self.cost = cost
         self.pind = pind
+        self.time = time
 
     def __str__(self):
         return str(self.x) + "," + str(self.y) + "," + str(self.cost) + "," + str(self.pind)
 
 
-def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
+def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=None,
+                      dmp_vel=None, dmp_res=None):
     """
     :param sx: start x coordinate
     :param sy: start y coordinate
@@ -32,18 +37,38 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
     :param gy: goal y coordinate
     :param obstacles: list of shapely polygons
     :param reso: resolution of smaller grids
+    :param cost_type: type of cost defining edge weights
+    :param dmp: path given by a dmp
+    :param dmp_vel: dmp_velocities
+    :param dmp_res: time resolution of the DMP
     :return: time parameterised path
+
     """
 
+    # scale the dmp and its velocities according to the resolution of the grid.
+
+    if cost_type == "dmp_traj":
+        print("shape of dmp is: ", dmp.shape)
+        print("shape of dmp velocity is: ", dmp_vel.shape)
+        for i in range(0, len(dmp)):
+            for j in range(0, len(dmp[i])):
+                dmp[i][j] = dmp[i][j] * 10.0 * reso
+                dmp_vel[i][j] = dmp[i][j] * 10.0 * reso
+
     nstart = Node(round(sx / reso), round(sy / reso), 0.0, -1)
-    ngoal = Node(round(gx / reso), round(gy / reso), 0.0, -1)
+
+    if cost_type == "dmp_traj":
+        ngoal = Node(round(gx / reso), round(gy / reso), 0.0, -1, len(dmp))
+
+    else:
+        ngoal = Node(round(gx / reso), round(gy / reso), 0.0, -1)
 
     # ox = [iox / reso for iox in ox]
     # oy = [ioy / reso for ioy in oy]
 
     obmap, minx, miny, maxx, maxy, xw, yw = calc_obstacle_map(obstacles, reso)
 
-    print("obmap is: ", obmap)
+    # print("obmap is: ", obmap)
 
     motion = get_motion_model()
 
@@ -51,12 +76,11 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
     openset[calc_index(nstart, xw, minx, miny)] = nstart
 
     while 1:
-        print("start of while loop")
+        # print("start of while loop")
         # time.sleep(3.0)
         c_id = min(openset, key=lambda o: openset[o].cost)
+        print("cid assigned at the start of the loop: ", c_id)
         current = openset[c_id]
-        #  print("current", current)
-
         # show graph
         if show_animation:
             plt.plot(current.x * reso, current.y * reso, "xc")
@@ -64,7 +88,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
                 plt.pause(0.001)
 
         if current.x == ngoal.x and current.y == ngoal.y:
-            print("Find goal")
+            print("[INFO]: searched reached the goal")
             ngoal.pind = current.pind
             ngoal.cost = current.cost
             break
@@ -76,9 +100,20 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
 
         # expand search grid based on motion model
         for i, _ in enumerate(motion):
-            node = Node(current.x + motion[i][0], current.y + motion[i][1],
+            if cost_type == "default":
+                node = Node(current.x + motion[i][0], current.y + motion[i][1],
                         current.cost + motion[i][2], c_id)
+            elif cost_type == "dmp_traj":
+                dmp_cost, delta_t = calculate_dmp_cost(current.x, current.y,
+                                                       motion[i][0], motion[i][1],
+                                                       current.time, dmp, dmp_vel, dmp_res)
+                node = Node(current.x + motion[i][0], current.y + motion[i][1],
+                            current.cost + 2 * dmp_cost,
+                            c_id, current.time + delta_t)
+                # print("while instantiating the node, pind assigned is: ", c_id)
+
             n_id = calc_index(node, xw, minx, miny)
+            #  print("nid is: ", n_id)
 
             if not verify_node(node, obmap, minx, miny, maxx, maxy):
                 continue
@@ -87,9 +122,13 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
                 continue
             # Otherwise if it is already in the open set
             if n_id in openset:
+                # print("nid exists in openset")
                 if openset[n_id].cost > node.cost:
                     openset[n_id].cost = node.cost
                     openset[n_id].pind = c_id
+                    # print("pind assigned is: ", c_id)
+                    if cost_type == "dmp_traj":
+                        openset[n_id].time = node.time
             else:
                 openset[n_id] = node
 
@@ -100,18 +139,19 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso):
 
 def calc_final_path(ngoal, closedset, reso):
     # generate final course
-    print("calculate final path")
+    print("calculate final path called")
     rx, ry = [ngoal.x * reso], [ngoal.y * reso]
     pind = ngoal.pind
     while pind != -1:
+        # print("pind is: ", pind)
         n = closedset[pind]
         rx.append(n.x * reso)
         ry.append(n.y * reso)
         pind = n.pind
 
     print("final path calculated..")
-    print("rx is: ", rx)
-    print("ry is: ", ry)
+    # print("rx is: ", rx)
+    # print("ry is: ", ry)
     # plt.plot(rx, ry, 'r')
     # print("plot command executed")
     return rx, ry
@@ -119,7 +159,7 @@ def calc_final_path(ngoal, closedset, reso):
 
 def verify_node(node, obmap, minx, miny, maxx, maxy):
 
-    print("nodex and nodey are: ", (node.x, node.y))
+    # print("nodex and nodey are: ", (node.x, node.y))
     if obmap[node.x][node.y]:
         return False
 
@@ -148,8 +188,8 @@ def calc_obstacle_map(obstacles, reso):
 
     xwidth = round(maxx - minx)
     ywidth = round(maxy - miny)
-    print("xwidth:", xwidth)
-    print("ywidth:", ywidth)
+    # print("xwidth:", xwidth)
+    # print("ywidth:", ywidth)
 
     # obstacle map generation
     obmap = [[False for i in range(xwidth)] for i in range(ywidth)]
@@ -185,15 +225,61 @@ def get_motion_model():
     return motion
 
 
-def main():
+def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel, dmp_res):
+    """
+    :param x: x coordinate of the point which we are moving to
+    :param y: y coordinate of the point which we are moving to
+    :param motion_x: distance to be moved along x
+    :param motion_y: distance to be moved along y
+    :param curr_time_index: current time in the trajectory(actual time = curr_time * dmp resolution)
+    :param dmp: reference dmp
+    :param dmp_vel: reference dmp velocities
+    :param dmp_res: time resolution of the dmp
+    :return: cost of the given node
+
+    """
+
+    distance = sqrt(motion_x * motion_x + motion_y * motion_y)
+
+    # print("current time index is: ", curr_time_index)
+    dmp_eff = dmp[int(curr_time_index):]
+
+    d = []
+
+    for pt in dmp_eff:
+        distance = sqrt((x + motion_x - pt[0]) ** 2 + (y + motion_y - pt[1]) ** 2)
+        d.append(distance)
+
+    d = np.array(d)
+
+    time_index = np.argmin(d)
+
+    delta_t_index = distance/sqrt(dmp_vel[time_index][0] ** 2 + dmp_vel[time_index][1] ** 2)
+
+    print("delta_t index is: ", delta_t_index)
+
+    print(curr_time_index + delta_t_index)
+    dmp_next = dmp[ceil(curr_time_index + delta_t_index)]
+
+    dmp_x = dmp_next[0]
+    dmp_y = dmp_next[1]
+
+    cost = sqrt((y - dmp_y) ** 2 + (x - dmp_x) ** 2)
+    print("cost is: ", cost)
+    return cost, delta_t_index
+
+
+def main(sx=10.0, sy=10.0, gx=50.0, gy=50.0,
+         grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[30]):
+
     print(__file__ + " start!!")
 
     # start and goal position
-    sx = 10.0  # [m]
-    sy = 10.0  # [m]
-    gx = 50.0  # [m]
-    gy = 50.0  # [m]
-    grid_size = 1.0  # [m]
+    # sx = 10.0  # [m]
+    # sy = 10.0  # [m]
+    # gx = 50.0  # [m]
+    # gy = 50.0  # [m]
+    # grid_size = 1.0  # [m]
 
     coords = [(36.0, 20.0), (36.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
     poly1 = Polygon(coords)
@@ -202,6 +288,7 @@ def main():
     # poly2 = Polygon(coords2)
 
     obstacles = [poly1]
+    print("[INFO]: obstacles created")
 
     if show_animation:
         # plt.plot(ox, oy, ".k")
@@ -215,12 +302,57 @@ def main():
         plt.plot(gx, gy, "xb")
         plt.grid(True)
         plt.axis("equal")
+        print("[INFO]: Plotted obstacles and start and end pts..")
 
-    rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
+    if cost_type == "dmp_traj":
+        for ii, bfs in enumerate(n_bfs):
+            dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs, dt=0.001)
+
+            dmp.imitate_path(y_des=np.array([path_x, path_y]))
+            dmp.y0[0] = sx
+            dmp.y0[1] = sy
+            # change the scale of the movement
+
+            # TODO: apply goal_check and goal_alteration
+            dmp.goal[0] = gx
+            dmp.goal[1] = gy
+
+            y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout(external_force=avoid_obstacles,
+                                                                   obstacles=obstacles, gamma=0.1)
+            print("[INFO]: trajectory rolled out successfully..")
+
+            plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
+            # plot_paths.append(plot)
+            # legend_key.append('no_avoidance')
+            for i in range(0, len(y_track_nc)):
+                plt.plot(y_track_nc[i][0], y_track_nc[i][1], 'bo')
+
+            path_points = []
+
+            for point in y_track_nc:
+                path_points.append(Point(tuple(point)))
+
+            path_intersect = check_collision(path_points, obstacles)
+
+            dmp_res = dmp.dt
+
+            # rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
+            print("calling dijkstra's planning..")
+            rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
+                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
+
+    elif cost_type == "default":
+        rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
 
     if show_animation:
         plt.plot(rx, ry, "-r")
         plt.show()
 
 
-main()
+x, y = get_trajectory("../csv/data.csv")
+# x = [i * 10.0 for i in x]
+# y = [j * 10.0 for j in y]
+print("[INFO]: Read x and y from the csv file")
+
+main(cost_type="dmp_traj", path_x=x, path_y=y)
+# main()
