@@ -108,7 +108,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
                                                        motion[i][0], motion[i][1],
                                                        current.time, dmp, dmp_vel, dmp_res)
                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
-                            current.cost +  dmp_cost,
+                            current.cost + dmp_cost,
                             c_id, current.time + delta_t)
                 # print("while instantiating the node, pind assigned is: ", c_id)
 
@@ -249,6 +249,12 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     # print("current time index is: ", curr_time_index)
     dmp_eff = dmp[int(curr_time_index):]
 
+    # pt, = plt.plot(x, y, 'bo')
+    # plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
+    # plt.pause(1.0)
+    # pt.remove()
+    # plo.remove()
+
     d = []
 
     for pt in dmp_eff:
@@ -343,13 +349,6 @@ def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
             dmp.goal[0] = gx
             dmp.goal[1] = gy
 
-            y_track, dy_track, ddy_track, s = dmp.rollout(external_force=avoid_obstacles,
-                                                          obstacles=obstacles, gamma=0.1)
-
-            plot, = plt.plot(y_track[:, 0], y_track[:, 1])
-            plot_paths.append(plot)
-            legend_key.append('pot. field')
-
             y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
             print("[INFO]: trajectory rolled out successfully..")
 
@@ -357,15 +356,24 @@ def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
             plot_paths.append(plot)
             legend_key.append('no_avoidance')
 
+            y_track, dy_track, ddy_track, s = dmp.rollout(external_force=avoid_obstacles,
+                                                          obstacles=obstacles, gamma=0.1)
+
+            plot, = plt.plot(y_track[:, 0], y_track[:, 1])
+            plot_paths.append(plot)
+            legend_key.append('pot. field')
+
+
+            #
             # for i in range(0, len(y_track_nc)):
             #     plt.plot(y_track_nc[i][0], y_track_nc[i][1], 'bo')
 
-            path_points = []
-
-            for point in y_track_nc:
-                path_points.append(Point(tuple(point)))
-
-            path_intersect = check_collision(path_points, obstacles)
+            # path_points = []
+            #
+            # for point in y_track_nc:
+            #     path_points.append(Point(tuple(point)))
+            #
+            # path_intersect = check_collision(path_points, obstacles)
 
             dmp_res = dmp.dt
 

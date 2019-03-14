@@ -5,10 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry.polygon import LinearRing, Polygon
 from shapely.geometry import Point, mapping
+# from grid_search import Node
+# from grid_search
 
 
 def get_trajectory(csvfile):
-
+    print("get trajectory called...")
     path_x = []
     path_y = []
 
@@ -18,14 +20,15 @@ def get_trajectory(csvfile):
     recorded_path_y = df['field.y']
     for i in range(0, len(recorded_path_x)):
         if i == 0:
-            path_x.append(recorded_path_x[i])
-            path_y.append(recorded_path_y[i])
+            print(recorded_path_x[i])
+            path_x.append((recorded_path_x[i] * 10.0))
+            path_y.append((recorded_path_y[i] * 10.0))
             print("first entry succedded..")
 
         else:
             if path_x[-1] != recorded_path_x[i] or path_y[-1] != recorded_path_y[i]:
-                path_x.append(recorded_path_x[i])
-                path_y.append(recorded_path_y[i])
+                path_x.append((recorded_path_x[i] * 10.0))
+                path_y.append((recorded_path_y[i] * 10.0))
 
     return path_x, path_y
 
@@ -93,7 +96,7 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
         # plt.plot(4.0, 8.0, 'bo')
         # plt.annotate("obstacle2", (4.0, 8.0))
 
-        y_track_nc, dy_track_nc, ddy_track_nc, s  = dmp.rollout()
+        y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
         plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
         plot_paths.append(plot)
         legend_key.append('no_avoidance')
@@ -119,7 +122,7 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
                 path_points = [Point(tuple(x)) for x in y_track]
                 collision = check_collision(path_points, obstacles)
                 # legend_key.append('gamma= ' + str(gamma))
-                if collision == False:
+                if not collision:
                     print("no collision for gamma: ", gamma)
                     print("dimension of y_track is: ", y_track.shape)
                     plot, = plt.plot(y_track[:, 0], y_track[:, 1])
@@ -199,7 +202,7 @@ def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
             # calculate the angle of obj relative to the direction we're going
             phi = np.arctan2(obj_vec[1], obj_vec[0])
 
-            dphi = gamma * phi * np.exp(-beta * abs(phi))
+            dphi = gamma * np.exp(-beta * abs(phi))
             R = np.dot(R_halfpi, np.outer(obst_potential_pt - y, dy))
             pval = -np.nan_to_num(np.dot(R, dy) * dphi)
 
