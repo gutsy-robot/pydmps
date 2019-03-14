@@ -52,8 +52,8 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
         print("shape of dmp velocity is: ", dmp_vel.shape)
         for i in range(0, len(dmp)):
             for j in range(0, len(dmp[i])):
-                dmp[i][j] = dmp[i][j] * 10.0 * reso
-                dmp_vel[i][j] = dmp[i][j] * 10.0 * reso
+                dmp[i][j] = dmp[i][j] * reso
+                dmp_vel[i][j] = dmp[i][j] * reso
 
     nstart = Node(round(sx / reso), round(sy / reso), 0.0, -1)
 
@@ -249,11 +249,11 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     # print("current time index is: ", curr_time_index)
     dmp_eff = dmp[int(curr_time_index):]
 
-    # pt, = plt.plot(x, y, 'bo')
-    # plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
-    # plt.pause(1.0)
-    # pt.remove()
-    # plo.remove()
+    pt, = plt.plot(x, y, 'bo')
+    plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
+    plt.pause(0.0001)
+    pt.remove()
+    plo.remove()
 
     d = []
 
@@ -284,7 +284,7 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     return cost, delta_t_index
 
 
-def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
+def main(sx=10.0, sy=10.0, gx=20.0, gy=20.0,
          grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[100]):
 
     print(__file__ + " start!!")
@@ -380,7 +380,7 @@ def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
             # rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
             print("calling dijkstra's planning..")
             rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
-                                       dmp=y_track, dmp_vel=dy_track, dmp_res=dmp_res)
+                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
 
     elif cost_type == "default":
         rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
