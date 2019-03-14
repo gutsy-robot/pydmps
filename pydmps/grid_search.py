@@ -79,7 +79,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
         # print("start of while loop")
         # time.sleep(3.0)
         c_id = min(openset, key=lambda o: openset[o].cost)
-        print("cid assigned at the start of the loop: ", c_id)
+        # print("cid assigned at the start of the loop: ", c_id)
         current = openset[c_id]
         # show graph
         if show_animation:
@@ -247,13 +247,15 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     distance = sqrt(motion_x * motion_x + motion_y * motion_y)
 
     # print("current time index is: ", curr_time_index)
-    dmp_eff = dmp[int(curr_time_index):]
 
-    pt, = plt.plot(x, y, 'bo')
-    plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
-    plt.pause(0.0001)
-    pt.remove()
-    plo.remove()
+    dmp_eff = dmp
+
+    # dmp_eff = dmp[int(curr_time_index):]
+    # pt, = plt.plot(x, y, 'bo')
+    # plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
+    # plt.pause(0.0001)
+    # pt.remove()
+    # plo.remove()
 
     d = []
 
@@ -265,13 +267,13 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
 
     time_index = np.argmin(d)
 
-    delta_t_index = distance/sqrt(dmp_vel[time_index][0] ** 2 + dmp_vel[time_index][1] ** 2)
+    delta_t_index = sqrt(motion_x ** 2 + motion_y ** 2)/sqrt(dmp_vel[time_index][0] ** 2 + dmp_vel[time_index][1] ** 2)
 
-    print("delta_t index is: ", delta_t_index)
+    # print("delta_t index is: ", delta_t_index)
 
-    print(curr_time_index + delta_t_index)
-    dmp_0 = dmp[floor(curr_time_index + delta_t_index)]
-    dmp_1 = dmp[ceil(curr_time_index + delta_t_index)]
+    # print(curr_time_index + delta_t_index)
+    dmp_0 = dmp[floor(time_index + delta_t_index)]
+    dmp_1 = dmp[ceil(time_index + delta_t_index)]
 
     dmp_next = dmp_0 + (dmp_1 - dmp_0) * delta_t_index
     # dmp_next = dmp[ceil(curr_time_index + delta_t_index)]
@@ -279,12 +281,12 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     dmp_x = dmp_next[0]
     dmp_y = dmp_next[1]
 
-    cost = sqrt((y - dmp_y) ** 2 + (x - dmp_x) ** 2)
-    print("cost is: ", cost)
+    cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2)
+    # print("cost is: ", cost)
     return cost, delta_t_index
 
 
-def main(sx=10.0, sy=10.0, gx=20.0, gy=20.0,
+def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
          grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[100]):
 
     print(__file__ + " start!!")
@@ -351,6 +353,7 @@ def main(sx=10.0, sy=10.0, gx=20.0, gy=20.0,
 
             y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
             print("[INFO]: trajectory rolled out successfully..")
+            print("shape of y_track_nc is: ", y_track_nc.shape)
 
             plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
             plot_paths.append(plot)
@@ -382,11 +385,14 @@ def main(sx=10.0, sy=10.0, gx=20.0, gy=20.0,
             rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
                                        dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
 
+            rx = np.array(rx)
+            print("shape of rx is: ", rx.shape)
+
     elif cost_type == "default":
         rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
 
     if show_animation:
-        plot, = plt.plot(rx, ry, "-r")
+        plot, = plt.plot(list(rx), ry, "-r")
         plot_paths.append(plot)
         legend_key.append('dijkstra')
         plt.legend(plot_paths, legend_key, loc='lower right')
