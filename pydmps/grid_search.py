@@ -110,6 +110,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
                             current.cost + dmp_cost,
                             c_id, current.time + delta_t)
+                print("current are: ", (current.x, current.y))
                 # print("while instantiating the node, pind assigned is: ", c_id)
 
             n_id = calc_index(node, xw, minx, miny)
@@ -159,7 +160,7 @@ def calc_final_path(ngoal, closedset, reso):
 
 def verify_node(node, obmap, minx, miny, maxx, maxy):
 
-    # print("nodex and nodey are: ", (node.x, node.y))
+    print("nodex and nodey are: ", (node.x, node.y))
     if obmap[node.x][node.y]:
         return False
 
@@ -273,10 +274,14 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
 
     # print(curr_time_index + delta_t_index)
     dmp_0 = dmp[floor(time_index + delta_t_index)]
-    dmp_1 = dmp[ceil(time_index + delta_t_index)]
 
-    dmp_next = dmp_0 + (dmp_1 - dmp_0) * delta_t_index
+    if ceil(time_index + delta_t_index) < len(dmp):
+        dmp_1 = dmp[ceil(time_index + delta_t_index)]
+        dmp_next = dmp_0 + (dmp_1 - dmp_0) * delta_t_index
     # dmp_next = dmp[ceil(curr_time_index + delta_t_index)]
+
+    else:
+        dmp_next = dmp_0
 
     dmp_x = dmp_next[0]
     dmp_y = dmp_next[1]
