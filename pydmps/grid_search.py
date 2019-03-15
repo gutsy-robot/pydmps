@@ -180,8 +180,8 @@ def calc_obstacle_map(obstacles, reso):
 
     minx = 0
     miny = 0
-    maxx = 100
-    maxy = 100
+    maxx = 1000
+    maxy = 1000
     #  print("minx:", minx)
     #  print("miny:", miny)
     #  print("maxx:", maxx)
@@ -287,11 +287,13 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     dmp_y = dmp_next[1]
 
     cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2)
+           # + sqrt((y - dmp[time_index][1]) ** 2 + (x - dmp[time_index][0]) ** 2)
+
     # print("cost is: ", cost)
     return cost, delta_t_index
 
 
-def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
+def main(sx=20.0, sy=10.0, gx=70.0, gy=60.0,
          grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[100]):
 
     print(__file__ + " start!!")
@@ -388,7 +390,7 @@ def main(sx=10.0, sy=10.0, gx=30.0, gy=60.0,
             # rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
             print("calling dijkstra's planning..")
             rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
-                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
+                                       dmp=y_track, dmp_vel=dy_track, dmp_res=dmp_res)
 
             rx = np.array(rx)
             print("shape of rx is: ", rx.shape)
