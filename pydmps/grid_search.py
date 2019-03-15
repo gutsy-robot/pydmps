@@ -106,11 +106,11 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
             elif cost_type == "dmp_traj":
                 dmp_cost, delta_t = calculate_dmp_cost(current.x, current.y,
                                                        motion[i][0], motion[i][1],
-                                                       current.time, dmp, dmp_vel, dmp_res)
+                                                       current.time, dmp, dmp_vel, obstacles)
                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
                             current.cost + dmp_cost,
                             c_id, current.time + delta_t)
-                print("current are: ", (current.x, current.y))
+                # print("current are: ", (current.x, current.y))
                 # print("while instantiating the node, pind assigned is: ", c_id)
 
             n_id = calc_index(node, xw, minx, miny)
@@ -160,7 +160,7 @@ def calc_final_path(ngoal, closedset, reso):
 
 def verify_node(node, obmap, minx, miny, maxx, maxy):
 
-    print("nodex and nodey are: ", (node.x, node.y))
+    # print("nodex and nodey are: ", (node.x, node.y))
     if obmap[node.x][node.y]:
         return False
 
@@ -231,7 +231,7 @@ def get_motion_model():
     return motion
 
 
-def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel, dmp_res):
+def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel, obstacles=None):
     """
     :param x: x coordinate of the point which we are moving to
     :param y: y coordinate of the point which we are moving to
@@ -240,16 +240,12 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     :param curr_time_index: current time in the trajectory(actual time = curr_time * dmp resolution)
     :param dmp: reference dmp
     :param dmp_vel: reference dmp velocities
-    :param dmp_res: time resolution of the dmp
+    :param obstacles: list of shapely polygons
     :return: cost of the given node
 
     """
 
-    distance = sqrt(motion_x * motion_x + motion_y * motion_y)
-
-    # print("current time index is: ", curr_time_index)
-
-    dmp_eff = dmp
+    # dmp_eff = dmp
 
     # dmp_eff = dmp[int(curr_time_index):]
     # pt, = plt.plot(x, y, 'bo')
@@ -260,8 +256,8 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
 
     d = []
 
-    for pt in dmp_eff:
-        distance = sqrt((x + motion_x - pt[0]) ** 2 + (y + motion_y - pt[1]) ** 2)
+    for pt in dmp:
+        distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2)
         d.append(distance)
 
     d = np.array(d)
@@ -286,14 +282,27 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     dmp_x = dmp_next[0]
     dmp_y = dmp_next[1]
 
-    cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2)
+    obstacle_cost = 0
+    if obstacles is not None:
+        for  obstacle in obstacles:
+            pol_ext = LinearRing(obstacle.exterior.coords)
+            d = pol_ext.project(Point(x + motion_x, y + motion_y))
+            p = pol_ext.interpolate(d)
+            obst_potential_pt = list(p.coords)[0]
+            dist = sqrt((y + motion_y - obst_potential_pt[1]) ** 2 + (x + motion_x - obst_potential_pt[0]) ** 2)
+            obstacle_cost += 10/((distance + 0.0000001) ** 2)
+
+    print("obstacle cost is: ", obstacle_cost)
+    cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost
+    print("total cost is: ", cost)
+
            # + sqrt((y - dmp[time_index][1]) ** 2 + (x - dmp[time_index][0]) ** 2)
 
     # print("cost is: ", cost)
     return cost, delta_t_index
 
 
-def main(sx=20.0, sy=10.0, gx=70.0, gy=60.0,
+def main(sx=20.0, sy=10.0, gx=100.0, gy=60.0,
          grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[100]):
 
     print(__file__ + " start!!")
@@ -390,7 +399,7 @@ def main(sx=20.0, sy=10.0, gx=70.0, gy=60.0,
             # rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
             print("calling dijkstra's planning..")
             rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
-                                       dmp=y_track, dmp_vel=dy_track, dmp_res=dmp_res)
+                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
 
             rx = np.array(rx)
             print("shape of rx is: ", rx.shape)
