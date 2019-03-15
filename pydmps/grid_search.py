@@ -84,8 +84,8 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
         # show graph
         if show_animation:
             plt.plot(current.x * reso, current.y * reso, "xc")
-            if len(closedset.keys()) % 10 == 0:
-                plt.pause(0.0000000000001)
+            # if len(closedset.keys()) % 10 == 0:
+            #     plt.pause(0.0000000000001)
 
         if current.x == ngoal.x and current.y == ngoal.y:
             print("[INFO]: searched reached the goal")
@@ -284,13 +284,13 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
 
     obstacle_cost = 0
     if obstacles is not None:
-        for  obstacle in obstacles:
+        for obstacle in obstacles:
             pol_ext = LinearRing(obstacle.exterior.coords)
             d = pol_ext.project(Point(x + motion_x, y + motion_y))
             p = pol_ext.interpolate(d)
             obst_potential_pt = list(p.coords)[0]
             dist = sqrt((y + motion_y - obst_potential_pt[1]) ** 2 + (x + motion_x - obst_potential_pt[0]) ** 2)
-            obstacle_cost += 10/((distance + 0.0000001) ** 2)
+            obstacle_cost += 10/((dist + 0.0000001) ** 2)
 
     print("obstacle cost is: ", obstacle_cost)
     cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost
@@ -302,7 +302,7 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     return cost, delta_t_index
 
 
-def main(sx=20.0, sy=10.0, gx=100.0, gy=60.0,
+def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
          grid_size=1.0, cost_type="default", path_x=None, path_y=None, n_bfs=[100]):
 
     print(__file__ + " start!!")
