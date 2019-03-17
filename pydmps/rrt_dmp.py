@@ -9,12 +9,11 @@ from utils import get_trajectory, check_collision, avoid_obstacles
 from dmp_discrete import DMPs_discrete
 import numpy as np
 from grid_search import Node
-from multiprocessing import Process
 import time
 
 
 class RrtDmps(object):
-    def __init__(self, start_x=20.0, start_y=10.0, goal_x=60.0, goal_y=60.0, obstacles=None, grid_size=1.0,
+    def __init__(self, start_x=80.0, start_y=70.0, goal_x=100.0, goal_y=100.0, obstacles=None, grid_size=1.0,
                  cost_type="dmp_traj", demo_x=None, demo_y=None, n_basis=[100], animation=True):
 
         print("RRTDMP object initialising..")
@@ -28,6 +27,9 @@ class RrtDmps(object):
         self.demo_x = demo_x
         self.demo_y = demo_y
         self.n_basis = n_basis
+
+        # self.forward_graph = [Node(round(start_x / self.grid_size), round(start_y / self.grid_size), 0.0, -1)]
+        # self.reverse_graph = [Node(round(goal_x / self.grid_size), round(goal_y / self.grid_size), 0.0, -1)]
 
         self.forward_graph = []
         self.reverse_graph = []
@@ -151,11 +153,11 @@ class RrtDmps(object):
                 dist = sqrt((y + motion_y - obst_potential_pt[1]) ** 2 + (x + motion_x - obst_potential_pt[0]) ** 2)
                 obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
 
-        print("obstacle cost is: ", obstacle_cost)
+        # print("obstacle cost is: ", obstacle_cost)
         cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost - sqrt((y - dmp[
             time_index][1]) ** 2 + (x - dmp[time_index][0]) ** 2)
 
-        print("total cost is: ", cost)
+        # print("total cost is: ", cost)
 
         return cost
 
@@ -186,27 +188,38 @@ class RrtDmps(object):
                 dmp_rev_dy[i][j] *= -1
         return dmp_rev, dmp_rev_dy
 
-    def calc_final_path(self, ngoal, graph_lookup="reverse"):
+    def calc_final_path(self, ngoal, closedset):
         # generate final course
 
         print("calculate final path called")
         rx, ry = [ngoal.x * self.grid_size], [ngoal.y * self.grid_size]
         pind = ngoal.pind
+
         while pind != -1:
-            if graph_lookup == "reverse":
-                n = self.forward_graph[pind]
-            elif graph_lookup == "forward":
-                n = self.reverse_graph[pind]
+            # if graph_lookup == "reverse":
+            print("pind is: ", pind)
+            n = closedset[pind]
+            # elif graph_lookup == "forward":
+            #     n = self.reverse_graph[pind]
 
             rx.append(n.x * self.grid_size)
             ry.append(n.y * self.grid_size)
+
             pind = n.pind
 
         print("final path calculated..")
 
         return rx, ry
 
-    def find_path(self, sx, sy, dmp=None, dmp_dy=None, graph_lookup="reverse"):
+    def find_path(self, sx, sy, gx, gy, dmp=None, dmp_dy=None):
+
+        dmp_rev = dmp
+        np.flip(dmp_rev, axis=0)
+        dmp_rev_dy = dmp_dy
+        np.flip(dmp_rev_dy, axis=0)
+        for i in range(0, len(dmp_rev_dy)):
+            for j in range(0, len(dmp_rev_dy[i])):
+                dmp_rev_dy[i][j] *= -1
 
         print("find path called..")
         if self.cost_type == "dmp_traj":
@@ -219,54 +232,107 @@ class RrtDmps(object):
 
         nstart = Node(round(sx / self.grid_size), round(sy / self.grid_size), 0.0, -1)
 
-        # ngoal = Node(round(gx / self.grid_size), round(gy / self.grid_size), 0.0, -1)
+        ngoal = Node(round(gx / self.grid_size), round(gy / self.grid_size), 0.0, -1)
 
-        ngoal = None
+        ngoal_forward = None
+        ngoal_reverse = None
+
+        # ngoal = None
         motion = self.motion_model
 
-        if graph_lookup == "reverse":
-            openset, self.forward_graph= dict(), dict()
+        openset_forward, closedset_forward = dict(), dict()
+        openset_reverse, closedset_reverse = dict(), dict()
 
-        elif graph_lookup == "forward":
-            openset, self.reverse_graph = dict(), dict()
+        openset_forward[self.calc_index(nstart)] = nstart
+        openset_reverse[self.calc_index(ngoal)] = ngoal
 
-        openset[self.calc_index(nstart)] = nstart
+        print("openset_forward is: ", openset_forward)
+        print("openset_reverse is: ", openset_reverse)
 
-        while 1:
-            c_id = min(openset, key=lambda o: openset[o].cost)
-            current = openset[c_id]
+        isbreak = False
+
+        while not isbreak:
+            # take a step for backward graph.
+
+
+            # print(lambda o: openset_reverse[o].cost)
+            c_id_r = min(openset_reverse, key=lambda o: openset_reverse[o].cost)
+            current_r = openset_reverse[c_id_r]
+            print("current_r is: ", type(current_r))
             # show graph
             if self.show_animation:
-                plt.plot(current.x * self.grid_size, current.y * self.grid_size, "xc")
-                if graph_lookup == "reverse":
-                    if len(self.forward_graph.keys()) % 10 == 0:
-                        plt.pause(0.0000000000001)
-                elif graph_lookup == "forward":
-                    if len(self.reverse_graph.keys()) % 10 == 0:
-                        plt.pause(0.0000000000001)
+                plt.plot(current_r.x * self.grid_size, current_r.y * self.grid_size, "bo")
+                if len(closedset_reverse.keys()) % 10 == 0:
+                    plt.pause(0.0000000000001)
 
-            if graph_lookup == "reverse":
-                pts = [(node.x, node.y) for node in self.reverse_graph]
-                if (current.x, current.y) in pts:
+            print("closedset forward is: ", closedset_forward)
+            for node in closedset_forward.values():
+                print("noode is: ", node)
+                if (current_r.x, current_r.y) == (node.x, node.y):
                     print("[INFO]: searched reached the goal")
-                    ngoal = current
-                    break
+                    ngoal_forward = node
+                    ngoal_reverse = current_r
+                    isbreak = True
 
-            elif graph_lookup == "front":
-                pts = [(node.x, node.y) for node in self.forward_graph]
-                if (current.x, current.y) in pts:
-                    ngoal = current
                     break
 
             # Remove the item from the open set
-            del openset[c_id]
+            del openset_reverse[c_id_r]
             # Add it to the closed set
-            if graph_lookup == "reverse":
-                self.forward_graph[c_id] = current
+            closedset_reverse[c_id_r] = current_r
+            # expand search grid based on motion model
+            for i, _ in enumerate(motion):
+                if self.cost_type == "default":
+                    node = Node(current_r.x + motion[i][0], current_r.y + motion[i][1],
+                                current_r.cost + motion[i][2], c_id_r)
+                elif self.cost_type == "dmp_traj":
+                    dmp_cost = self.calculate_dmp_cost(current_r.x, current_r.y, motion[i][0],
+                                                       motion[i][1], dmp_rev, dmp_rev_dy)
+                    node = Node(current_r.x + motion[i][0], current_r.y + motion[i][1],
+                                current_r.cost + dmp_cost,
+                                c_id_r)
 
-            elif graph_lookup == "forward":
-                self.reverse_graph[c_id] = current
+                n_id_r = self.calc_index(node)
 
+                if not self.verify_node(node):
+                    continue
+
+                if n_id_r in closedset_reverse:
+                    continue
+
+                # Otherwise if it is already in the open set
+                if n_id_r in openset_reverse:
+                    if openset_reverse[n_id_r].cost > node.cost:
+                        openset_reverse[n_id_r].cost = node.cost
+                        openset_reverse[n_id_r].pind = c_id_r
+
+                else:
+                    openset_reverse[n_id_r] = node
+
+            c_id = min(openset_forward, key=lambda o: openset_forward[o].cost)
+            current = openset_forward[c_id]
+            print("current is: ", type(current))
+
+            # show graph
+            if self.show_animation:
+                plt.plot(current.x * self.grid_size, current.y * self.grid_size, "xc")
+                if len(closedset_forward.keys()) % 10 == 0:
+                    plt.pause(0.0000000000001)
+
+            # pts = [(node.x, node.y) for node in closedset_reverse]
+            # print("closedset_reverse is: ", closedset_reverse)
+            for node in closedset_reverse.values():
+                if (current.x, current.y) == (node.x, node.y):
+                    print("[INFO]: searched reached the goal")
+                    ngoal_reverse = node
+                    ngoal_forward = current
+                    isbreak = True
+                    break
+
+            # Remove the item from the open set
+            del openset_forward[c_id]
+            # Add it to the closed set
+            closedset_forward[c_id] = current
             # expand search grid based on motion model
             for i, _ in enumerate(motion):
                 if self.cost_type == "default":
@@ -284,29 +350,122 @@ class RrtDmps(object):
                 if not self.verify_node(node):
                     continue
 
-                if graph_lookup == "reverse":
-                    if n_id in self.forward_graph:
-                        continue
-                elif graph_lookup == "forward":
-                    if n_id in self.reverse_graph:
+                if n_id in closedset_forward:
                         continue
 
                 # Otherwise if it is already in the open set
-                if n_id in openset:
-                    if openset[n_id].cost > node.cost:
-                        openset[n_id].cost = node.cost
-                        openset[n_id].pind = c_id
+                if n_id in openset_forward:
+                    if openset_forward[n_id].cost > node.cost:
+                        openset_forward[n_id].cost = node.cost
+                        openset_forward[n_id].pind = c_id
 
                 else:
-                    openset[n_id] = node
+                    openset_forward[n_id] = node
 
-        rx, ry = self.calc_final_path(ngoal, graph_lookup)
-        if graph_lookup == "reverse":
-            self.r1_x = rx
-            self.r1_y = ry
-        elif graph_lookup == "forward":
-            self.r2_x = rx
-            self.r2_y = ry
+        self.r1_x, self.r1_y = self.calc_final_path(ngoal_forward, closedset_forward)
+        self.r2_x, self.r2_y = self.calc_final_path(ngoal_reverse, closedset_reverse)
+
+    # def find_path(self, sx, sy, dmp=None, dmp_dy=None, graph_lookup="reverse"):
+    #
+    #     print("find path called..")
+    #     if self.cost_type == "dmp_traj":
+    #         print("shape of dmp is: ", self.dmp.shape)
+    #         print("shape of dmp velocity is: ", self.dmp_dy.shape)
+    #         for i in range(0, len(dmp)):
+    #             for j in range(0, len(dmp[i])):
+    #                 dmp[i][j] = dmp[i][j] * self.grid_size
+    #                 dmp_dy[i][j] = dmp_dy[i][j] * self.grid_size
+    #
+    #     nstart = Node(round(sx / self.grid_size), round(sy / self.grid_size), 0.0, -1)
+    #
+    #     # ngoal = Node(round(gx / self.grid_size), round(gy / self.grid_size), 0.0, -1)
+    #
+    #     ngoal = None
+    #     motion = self.motion_model
+    #
+    #     if graph_lookup == "reverse":
+    #         openset, self.forward_graph= dict(), dict()
+    #
+    #     elif graph_lookup == "forward":
+    #         openset, self.reverse_graph = dict(), dict()
+    #
+    #     openset[self.calc_index(nstart)] = nstart
+    #
+    #     while 1:
+    #         c_id = min(openset, key=lambda o: openset[o].cost)
+    #         current = openset[c_id]
+    #         # show graph
+    #         # if self.show_animation:
+    #         #     plt.plot(current.x * self.grid_size, current.y * self.grid_size, "xc")
+    #         #     if graph_lookup == "reverse":
+    #         #         if len(self.forward_graph.keys()) % 10 == 0:
+    #         #             plt.pause(0.0000000000001)
+    #         #     elif graph_lookup == "forward":
+    #         #         if len(self.reverse_graph.keys()) % 10 == 0:
+    #         #             plt.pause(0.0000000000001)
+    #
+    #         if graph_lookup == "reverse":
+    #             pts = [(node.x, node.y) for node in self.reverse_graph]
+    #             if (current.x, current.y) in pts:
+    #                 print("[INFO]: searched reached the goal")
+    #                 ngoal = current
+    #                 break
+    #
+    #         elif graph_lookup == "forward":
+    #             pts = [(node.x, node.y) for node in self.forward_graph]
+    #             if (current.x, current.y) in pts:
+    #                 ngoal = current
+    #                 break
+    #
+    #         # Remove the item from the open set
+    #         del openset[c_id]
+    #         # Add it to the closed set
+    #         if graph_lookup == "reverse":
+    #             self.forward_graph[c_id] = current
+    #
+    #         elif graph_lookup == "forward":
+    #             self.reverse_graph[c_id] = current
+    #
+    #         # expand search grid based on motion model
+    #         for i, _ in enumerate(motion):
+    #             if self.cost_type == "default":
+    #                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
+    #                             current.cost + motion[i][2], c_id)
+    #             elif self.cost_type == "dmp_traj":
+    #                 dmp_cost = self.calculate_dmp_cost(current.x, current.y, motion[i][0],
+    #                                                    motion[i][1], dmp, dmp_dy)
+    #                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
+    #                             current.cost + dmp_cost,
+    #                             c_id)
+    #
+    #             n_id = self.calc_index(node)
+    #
+    #             if not self.verify_node(node):
+    #                 continue
+    #
+    #             if graph_lookup == "reverse":
+    #                 if n_id in self.forward_graph:
+    #                     continue
+    #             elif graph_lookup == "forward":
+    #                 if n_id in self.reverse_graph:
+    #                     continue
+    #
+    #             # Otherwise if it is already in the open set
+    #             if n_id in openset:
+    #                 if openset[n_id].cost > node.cost:
+    #                     openset[n_id].cost = node.cost
+    #                     openset[n_id].pind = c_id
+    #
+    #             else:
+    #                 openset[n_id] = node
+    #
+    #     rx, ry = self.calc_final_path(ngoal, graph_lookup)
+    #     if graph_lookup == "reverse":
+    #         self.r1_x = rx
+    #         self.r1_y = ry
+    #     elif graph_lookup == "forward":
+    #         self.r2_x = rx
+    #         self.r2_y = ry
 
 
 if __name__ == "__main__":
@@ -333,24 +492,24 @@ if __name__ == "__main__":
 
     dmp_rev, dmp_rev_dy = rrt_dmp.reverse_dmp()
 
-    time.sleep(10.0)
-    p1 = Process(target=rrt_dmp.find_path, args=(rrt_dmp.start_x, rrt_dmp.start_y, rrt_dmp.dmp, rrt_dmp.dmp_dy))
-    p1.start()
+    # time.sleep(10.0)
+    # p1 = Process(target=rrt_dmp.find_path, args=(rrt_dmp.start_x, rrt_dmp.start_y, rrt_dmp.dmp, rrt_dmp.dmp_dy))
+    # p1.start()
+    #
+    # p2 = Process(target=rrt_dmp.find_path, args=(rrt_dmp.goal_x, rrt_dmp.goal_y, dmp_rev, dmp_rev_dy, "forward"))
+    # p2.start()
 
-    p2 = Process(target=rrt_dmp.find_path, args=(rrt_dmp.goal_x, rrt_dmp.goal_y, dmp_rev, dmp_rev_dy, "forward"))
-    p2.start()
-
-    # rrt_dmp.find_path(rrt_dmp.start_x, rrt_dmp.start_y, rrt_dmp.dmp, rrt_dmp.dmp_dy)
+    rrt_dmp.find_path(rrt_dmp.start_x, rrt_dmp.start_y, rrt_dmp.goal_x, rrt_dmp.goal_y, rrt_dmp.dmp, rrt_dmp.dmp_dy)
     # rrt_dmp.find_path(rrt_dmp.goal_x, rrt_dmp.goal_y, dmp_rev, dmp_rev_dy, "forward")
 
-    # time.sleep(1000000000.0)
-    # plot, = plt.plot(rrt_dmp.r1_x, rrt_dmp.r1_y, "-r")
-    # rrt_dmp.plots.append(plot)
-    # rrt_dmp.legend.append('r1')
-    #
-    # plot, = plt.plot(rrt_dmp.r2_x, rrt_dmp.r2_y, "-r")
-    # rrt_dmp.plots.append(plot)
-    # rrt_dmp.legend.append('r2')
+    # time.sleep(1000.0)
+    plot, = plt.plot(rrt_dmp.r1_x, rrt_dmp.r1_y, "-r")
+    rrt_dmp.plots.append(plot)
+    rrt_dmp.legend.append('r1')
+
+    plot, = plt.plot(rrt_dmp.r2_x, rrt_dmp.r2_y, "-r")
+    rrt_dmp.plots.append(plot)
+    rrt_dmp.legend.append('r2')
 
     plt.legend(rrt_dmp.plots, rrt_dmp.legend, loc='lower right')
     plt.show()
