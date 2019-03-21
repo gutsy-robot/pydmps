@@ -30,7 +30,7 @@ class CanonicalSystem:
 
     """
 
-    def __init__(self, dt, ax=1.0, pattern='discrete'):
+    def __init__(self, dt, ax=1.0, pattern='discrete', run_time=10.0):
         """Default values from Schaal (2012)
 
         dt float: the timestep
@@ -42,7 +42,7 @@ class CanonicalSystem:
         self.pattern = pattern
         if pattern == 'discrete':
             self.step = self.step_discrete
-            self.run_time = 1.0
+            self.run_time = run_time
         elif pattern == 'rhythmic':
             self.step = self.step_rhythmic
             self.run_time = 2*np.pi
