@@ -11,6 +11,7 @@ from math import sqrt, ceil, floor
 from utils import get_trajectory, check_collision, avoid_obstacles
 from dmp_discrete import DMPs_discrete
 import numpy as np
+from math import modf
 
 show_animation = True
 
@@ -29,7 +30,7 @@ class Node(object):
 
 
 def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=None,
-                      dmp_vel=None, dmp_res=None):
+                      dmp_vel=None, dt=0.01):
     """
     :param sx: start x coordinate
     :param sy: start y coordinate
@@ -40,7 +41,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
     :param cost_type: type of cost defining edge weights
     :param dmp: path given by a dmp
     :param dmp_vel: dmp_velocities
-    :param dmp_res: time resolution of the DMP
+    :param dt: time resolution of the dmp
     :return: time parameterised path
 
     """
@@ -52,8 +53,8 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
         print("shape of dmp velocity is: ", dmp_vel.shape)
         for i in range(0, len(dmp)):
             for j in range(0, len(dmp[i])):
-                dmp[i][j] = dmp[i][j] * reso
-                dmp_vel[i][j] = dmp[i][j] * reso
+                dmp[i][j] = dmp[i][j] / reso
+                dmp_vel[i][j] = dmp[i][j] / reso
 
     nstart = Node(round(sx / reso), round(sy / reso), 0.0, -1)
 
@@ -63,12 +64,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
     else:
         ngoal = Node(round(gx / reso), round(gy / reso), 0.0, -1)
 
-    # ox = [iox / reso for iox in ox]
-    # oy = [ioy / reso for ioy in oy]
-
     obmap, minx, miny, maxx, maxy, xw, yw = calc_obstacle_map(obstacles, reso)
-
-    # print("obmap is: ", obmap)
 
     motion = get_motion_model()
 
@@ -76,16 +72,13 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
     openset[calc_index(nstart, xw, minx, miny)] = nstart
 
     while 1:
-        # print("start of while loop")
-        # time.sleep(3.0)
         c_id = min(openset, key=lambda o: openset[o].cost)
-        # print("cid assigned at the start of the loop: ", c_id)
         current = openset[c_id]
         # show graph
         if show_animation:
             plt.plot(current.x * reso, current.y * reso, "xc")
-            # if len(closedset.keys()) % 10 == 0:
-            #     plt.pause(0.0000000000001)
+            if len(closedset.keys()) % 10 == 0:
+                plt.pause(0.1)
 
         if current.x == ngoal.x and current.y == ngoal.y:
             print("[INFO]: searched reached the goal")
@@ -102,19 +95,16 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
         for i, _ in enumerate(motion):
             if cost_type == "default":
                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
-                        current.cost + motion[i][2], c_id)
+                            current.cost + motion[i][2], c_id)
             elif cost_type == "dmp_traj":
-                dmp_cost, delta_t = calculate_dmp_cost(current.x, current.y,
-                                                       motion[i][0], motion[i][1],
-                                                       current.time, dmp, dmp_vel, obstacles)
+                dmp_cost = calculate_dmp_cost(current.x, current.y,
+                                              motion[i][0], motion[i][1],
+                                              dmp, dmp_vel, obstacles, reso, dt)
                 node = Node(current.x + motion[i][0], current.y + motion[i][1],
                             current.cost + dmp_cost,
-                            c_id, current.time + delta_t)
-                # print("current are: ", (current.x, current.y))
-                # print("while instantiating the node, pind assigned is: ", c_id)
+                            c_id)
 
             n_id = calc_index(node, xw, minx, miny)
-            #  print("nid is: ", n_id)
 
             if not verify_node(node, obmap, minx, miny, maxx, maxy):
                 continue
@@ -127,9 +117,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
                 if openset[n_id].cost > node.cost:
                     openset[n_id].cost = node.cost
                     openset[n_id].pind = c_id
-                    # print("pind assigned is: ", c_id)
-                    if cost_type == "dmp_traj":
-                        openset[n_id].time = node.time
+
             else:
                 openset[n_id] = node
 
@@ -151,10 +139,7 @@ def calc_final_path(ngoal, closedset, reso):
         pind = n.pind
 
     print("final path calculated..")
-    # print("rx is: ", rx)
-    # print("ry is: ", ry)
-    # plt.plot(rx, ry, 'r')
-    # print("plot command executed")
+
     return rx, ry
 
 
@@ -182,15 +167,9 @@ def calc_obstacle_map(obstacles, reso):
     miny = 0
     maxx = 1000
     maxy = 1000
-    #  print("minx:", minx)
-    #  print("miny:", miny)
-    #  print("maxx:", maxx)
-    #  print("maxy:", maxy)
 
     xwidth = round(maxx - minx)
     ywidth = round(maxy - miny)
-    # print("xwidth:", xwidth)
-    # print("ywidth:", ywidth)
 
     # obstacle map generation
     obmap = [[False for i in range(xwidth)] for i in range(ywidth)]
@@ -198,14 +177,8 @@ def calc_obstacle_map(obstacles, reso):
         x = ix + minx
         for iy in range(ywidth):
             y = iy + miny
-            #  print(x, y)
             point = Point((reso * x, reso * y))
             for obstacle in obstacles:
-                # print("obstacle is: ", obstacle)
-                # for t in obstacle:
-                #     for i in range(0, len(t)):
-                #         t[i] = t[i] / reso
-
                 if obstacle.contains(point):
                     obmap[ix][iy] = True
                     break
@@ -231,28 +204,19 @@ def get_motion_model():
     return motion
 
 
-def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel, obstacles=None):
+def calculate_dmp_cost(x, y, motion_x, motion_y, dmp, dmp_vel, obstacles=None, reso=1.0, dt=0.01):
     """
     :param x: x coordinate of the point which we are moving to
     :param y: y coordinate of the point which we are moving to
     :param motion_x: distance to be moved along x
     :param motion_y: distance to be moved along y
-    :param curr_time_index: current time in the trajectory(actual time = curr_time * dmp resolution)
     :param dmp: reference dmp
     :param dmp_vel: reference dmp velocities
     :param obstacles: list of shapely polygons
+    :param reso: resolution of the 2D grid
     :return: cost of the given node
 
     """
-
-    # dmp_eff = dmp
-
-    # dmp_eff = dmp[int(curr_time_index):]
-    # pt, = plt.plot(x, y, 'bo')
-    # plo, = plt.plot(dmp_eff[:, 0], dmp_eff[:, 1])
-    # plt.pause(0.0001)
-    # pt.remove()
-    # plo.remove()
 
     d = []
 
@@ -264,20 +228,21 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
 
     time_index = np.argmin(d)
 
-    delta_t_index = sqrt(motion_x ** 2 + motion_y ** 2)/sqrt(dmp_vel[time_index][0] ** 2 + dmp_vel[time_index][1] ** 2)
+    # print("vx is: ", dmp_vel[time_index][0])
+    # print("vy is: ", dmp_vel[time_index][1])
 
-    # print("delta_t index is: ", delta_t_index)
+    delta_t_index = (sqrt(motion_x ** 2 + motion_y ** 2)/sqrt(dmp_vel[time_index][0] ** 2 +
+                                                              dmp_vel[time_index][1] ** 2))/dt
+    print("delta_t index is: ", delta_t_index)
+    if floor(time_index + delta_t_index) < len(dmp):
+        dmp_0 = dmp[floor(time_index + delta_t_index)]
 
-    # print(curr_time_index + delta_t_index)
-    dmp_0 = dmp[floor(time_index + delta_t_index)]
+        if ceil(time_index + delta_t_index) < len(dmp):
+            dmp_1 = dmp[ceil(time_index + delta_t_index)]
+            dmp_next = dmp_0 + (dmp_1 - dmp_0) * modf(delta_t_index)[0]
 
-    if ceil(time_index + delta_t_index) < len(dmp):
-        dmp_1 = dmp[ceil(time_index + delta_t_index)]
-        dmp_next = dmp_0 + (dmp_1 - dmp_0) * delta_t_index
-    # dmp_next = dmp[ceil(curr_time_index + delta_t_index)]
-
-    else:
-        dmp_next = dmp_0
+        else:
+            dmp_next = dmp_0
 
     dmp_x = dmp_next[0]
     dmp_y = dmp_next[1]
@@ -286,20 +251,24 @@ def calculate_dmp_cost(x, y, motion_x, motion_y,  curr_time_index, dmp, dmp_vel,
     if obstacles is not None:
         for obstacle in obstacles:
             pol_ext = LinearRing(obstacle.exterior.coords)
-            d = pol_ext.project(Point(x + motion_x, y + motion_y))
+            d = pol_ext.project(Point(reso * (x + motion_x), reso * (y + motion_y)))
             p = pol_ext.interpolate(d)
             obst_potential_pt = list(p.coords)[0]
-            dist = sqrt((y + motion_y - obst_potential_pt[1]) ** 2 + (x + motion_x - obst_potential_pt[0]) ** 2)
-            obstacle_cost += 10/((dist + 0.0000001) ** 2)
+            dist = sqrt((y + motion_y - round(obst_potential_pt[1]/reso)) ** 2 +
+                        (x + motion_x - round(obst_potential_pt[0]/reso)) ** 2)
+            obstacle_cost += 1000/((dist + 0.0000001) ** 2)
 
     print("obstacle cost is: ", obstacle_cost)
-    cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost
-    print("total cost is: ", cost)
+    cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost - \
+           sqrt((y - dmp[time_index][1]) ** 2 + (x - dmp[time_index][0]) ** 2)
 
-           # + sqrt((y - dmp[time_index][1]) ** 2 + (x - dmp[time_index][0]) ** 2)
+    print("dmp cost is: ", sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2))
 
-    # print("cost is: ", cost)
-    return cost, delta_t_index
+    # print("total cost is: ", cost)
+    # plt.scatter(reso * (x + motion_x), reso * (y + motion_y))
+    # plt.scatter(reso * dmp_x, reso * dmp_y)
+    # plt.pause(0.01)
+    return cost
 
 
 def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
@@ -356,8 +325,8 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
 
     if cost_type == "dmp_traj":
         for ii, bfs in enumerate(n_bfs):
-            dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs, dt=0.01)
-
+            dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs, dt=0.01, run_time=1.0)
+            
             dmp.imitate_path(y_des=np.array([path_x, path_y]))
             dmp.y0[0] = sx
             dmp.y0[1] = sy
@@ -372,15 +341,16 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
             print("shape of y_track_nc is: ", y_track_nc.shape)
 
             plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
+            plt.scatter(y_track_nc[:, 0], y_track_nc[:, 1])
             plot_paths.append(plot)
             legend_key.append('no_avoidance')
 
-            y_track, dy_track, ddy_track, s = dmp.rollout(external_force=avoid_obstacles,
-                                                          obstacles=obstacles, gamma=0.1)
-
-            plot, = plt.plot(y_track[:, 0], y_track[:, 1])
-            plot_paths.append(plot)
-            legend_key.append('pot. field')
+            # y_track, dy_track, ddy_track, s = dmp.rollout(external_force=avoid_obstacles,
+            #                                               obstacles=obstacles, gamma=0.1)
+            #
+            # plot, = plt.plot(y_track[:, 0], y_track[:, 1])
+            # plot_paths.append(plot)
+            # legend_key.append('pot. field')
 
 
             #
@@ -393,13 +363,11 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
             #     path_points.append(Point(tuple(point)))
             #
             # path_intersect = check_collision(path_points, obstacles)
-
-            dmp_res = dmp.dt
-
             # rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
+
             print("calling dijkstra's planning..")
             rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size, cost_type="dmp_traj",
-                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dmp_res=dmp_res)
+                                       dmp=y_track_nc, dmp_vel=dy_track_nc, dt=dmp.dt)
 
             rx = np.array(rx)
             print("shape of rx is: ", rx.shape)
@@ -408,7 +376,7 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
         rx, ry = dijkstra_planning(sx, sy, gx, gy, obstacles, grid_size)
 
     if show_animation:
-        plot, = plt.plot(list(rx), ry, "-r")
+        plot, = plt.plot(rx, ry, "-r")
         plot_paths.append(plot)
         legend_key.append('dijkstra')
         plt.legend(plot_paths, legend_key, loc='lower right')
@@ -416,10 +384,19 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
         plt.show()
 
 
-x, y = get_trajectory("../csv/data.csv")
-# x = [i * 10.0 for i in x]
-# y = [j * 10.0 for j in y]
-print("[INFO]: Read x and y from the csv file")
+if __name__ == "__main__":
+    x, y = get_trajectory("../csv/data.csv")
+    # x = [i * 10.0 for i in x]
+    # y = [j * 10.0 for j in y]
+    print("[INFO]: Read x and y from the csv file")
 
-main(cost_type="dmp_traj", path_x=x, path_y=y)
-# main()
+    main(cost_type="dmp_traj", path_x=x, path_y=y)
+
+
+
+
+
+
+
+
+
