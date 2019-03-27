@@ -14,7 +14,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import axes3d
 
 
-show_animation = True
+show_animation = False
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
@@ -81,10 +81,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, reso_time=0.01, cost_type
     openset[calc_index(nstart, xw, minx, miny)] = nstart
 
     while 1:
-        for node in openset.items():
-            # print(node[1].t)
-            if node[1].t != 0:
-                print("non zero t node in openset")
+
         c_id = min(openset, key=lambda o: openset[o].cost)
         current = openset[c_id]
         # print("min dmp index of current active search node is: ", current.dmp_closest_pt_index)
@@ -203,38 +200,38 @@ def calc_obstacle_map(obstacles, reso):
 
 
 def calc_index(node, xwidth, xmin, ymin):
-    return (node.y - ymin) * xwidth + (node.x - xmin) + node.t
+    # return (node.y - ymin) * xwidth + (node.x - xmin) + node.t
+    return node.x, node.y, node.t
 
 
 def get_motion_model():
     # dx, dy, cost
-    motion = [[1, 0, 0, 1],
-              [0, 1, 0, 1],
-              [-1, 0, 0, 1],
-              [0, -1, 0, 1],
-              [0, 0, 1, 1],
-              [0, 0, -1, 1],
-              [-1, -1, 0, math.sqrt(2)],
-              [-1, 1, 0, math.sqrt(2)],
-              [1, -1, 0, math.sqrt(2)],
-              [1, 1, 0, math.sqrt(2)],
+    # motion = [[1, 0, 0, 1],
+    #           [0, 1, 0, 1],
+    #           [-1, 0, 0, 1],
+    #           [0, -1, 0, 1],
+    #           [0, 0, 1, 1],
+    #           [-1, -1, 0, math.sqrt(2)],
+    #           [-1, 1, 0, math.sqrt(2)],
+    #           [1, -1, 0, math.sqrt(2)],
+    #           [1, 1, 0, math.sqrt(2)],
+    #           [1, 0, 1, math.sqrt(2)],
+    #           [-1, 0, 1, math.sqrt(2)],
+    #           [0, 1, 1, math.sqrt(2)],
+    #           [0, -1, 1, math.sqrt(2)]]
+              # [1, 1, 1, math.sqrt(3)],
+              # [-1, 1, 1, math.sqrt(3)],
+              # [-1, -1, 1, math.sqrt(3)],
+              # [-1, 1, -1, math.sqrt(3)],
+              # [-1, -1, -1, math.sqrt(3)],
+              # [1, -1, 1, math.sqrt(3)],
+              # [1, -1, -1, math.sqrt(3)],
+              # [1, 1, -1, math.sqrt(3)]]
+    motion = [[0, 0, 1, 1],
               [1, 0, 1, math.sqrt(2)],
-              [1, 0, -1, math.sqrt(2)],
               [-1, 0, 1, math.sqrt(2)],
-              [-1, 0, -1, math.sqrt(2)],
               [0, 1, 1, math.sqrt(2)],
-              [0, -1, 1, math.sqrt(2)],
-              [0, 1, -1, math.sqrt(2)],
-              [0, -1, -1, math.sqrt(2)],
-              [1, 1, 1, math.sqrt(3)],
-              [-1, 1, 1, math.sqrt(3)],
-              [-1, -1, 1, math.sqrt(3)],
-              [-1, 1, -1, math.sqrt(3)],
-              [-1, -1, -1, math.sqrt(3)],
-              [1, -1, 1, math.sqrt(3)],
-              [1, -1, -1, math.sqrt(3)],
-              [1, 1, -1, math.sqrt(3)]]
-
+              [0, -1, 1, math.sqrt(2)]]
     return motion
 
 
@@ -267,7 +264,11 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
     min_index = np.argmin(d)
     # print("min index is: ", min_index)
 
+    vx = motion_x/ delta_t
+    vy = motion_y/ delta_t
+
     cost = sqrt((x + motion_x - dmp[min_index][0]) ** 2 + (y + motion_y - dmp[min_index][1]) ** 2 +
+                # (vx - dmp_vel[min_index][0]) ** 2 + (vy - dmp_vel[min_index][1]) ** 2)
                 (t + delta_t - dmp[min_index][2]) ** 2)
 
     obstacle_cost = 0
@@ -417,7 +418,9 @@ if __name__ == "__main__":
     #         demo_y.append(y[i])
 
     print("[INFO]: Read x and y from the csv file")
-    plt.scatter(x, y)
+    # plt.scatter(x, y)
+    x = [10 * i for i in x]
+    y = [10 * j for j in y]
     main(cost_type="dmp_traj", path_x=x, path_y=y)
 
 
