@@ -29,7 +29,7 @@ plt2d = fig2.add_subplot(111)
 
 def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
     mean = [x_dmp, y_dmp, t_dmp]
-    cov = [[200, 0, 0], [0, 200, 0], [0, 0, 200]]
+    cov = [[10, 0, 0], [0, 10, 0], [0, 0, 0.1]]
     x, y, t = np.random.multivariate_normal(mean, cov, 1).T
 
     return x, y, t
@@ -39,6 +39,8 @@ def sample_unform(minx, miny, mint, maxx, maxy, maxt):
     x = (random.random() - minx) * (maxx - minx)
     y = (random.random() - miny) * (maxy - miny)
     t = (random.random() - mint) * (maxt - mint)
+    # if math.sqrt((x - 10.0) ** 2 + (y - 10.0) ** 2 + t **2) < 9.0:
+    #     print("point sampled should be in the roadmap of t[0]")
 
     return x, y, t
 
@@ -112,14 +114,16 @@ def get_reward(x, y, t, dmp, obstacles=None):
                             (x - obst_potential_pt[0]) ** 2)
                 obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
 
-    cost += obstacle_cost
+    # cost += obstacle_cost
 
     return 1 / cost
 
 
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
+def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=5000):
 
     print("plan_ucb called..")
+
+    time_reso = dmp_time[1][2] - dmp_time[0][2]
     dmp_x_min = np.min(dmp_time[:, 0])
     dmp_y_min = np.min(dmp_time[:, 1])
     dmp_t_min = np.min(dmp_time[:, 2])
@@ -127,6 +131,9 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
     dmp_x_max = np.max(dmp_time[:, 0])
     dmp_y_max = np.max(dmp_time[:, 1])
     dmp_t_max = np.max(dmp_time[:, 2])
+
+    print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
+    print("max for uniform distribution is: ", (dmp_x_max, dmp_y_max, dmp_t_max))
 
     ucb = UCB()
     n_distributions = 2
@@ -141,19 +148,28 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
     vertices = [start, goal]
     roadmap = [[], []]
 
+    for i in range(1, 20):
+        sample_x.append(goal.x)
+        sample_y.append(goal.y)
+        t = i * time_reso + goal.t
+        sample_t.append(t)
+        n = Node(goal.x, goal.y, t, i * time_reso, -1)
+        vertices.append(n)
+        roadmap.append([])
+
     while len(vertices) < num_points:
         arm = ucb.select_arm()
-        print("arm selected is ", arm)
+        # print("arm selected is ", arm)
         if arm == 0:
-            x, y, t = sample_unform(dmp_x_min - 100, dmp_y_min - 100, 0,
-                                    dmp_x_max + 100, dmp_y_max + 100, dmp_t_max + 10)
+            x, y, t = sample_unform(0, 0, 0,
+                                    dmp_x_max + 10, dmp_y_max + 10, dmp_t_max + 0.1)
 
         # else:
         #     x, y, t = sample_dmp_normal(dmp_time[arm][0], dmp_time[arm][1], dmp_time[arm][2])
 
         else:
-            x, y, t = sample_unform(dmp_x_min - 10, dmp_y_min - 10, 0,
-                                    dmp_x_max + 10, dmp_y_max + 10, dmp_t_max + 2)
+            x, y, t = sample_unform(0, 0, 0,
+                                    dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 2)
 
         reward = get_reward(x, y, t, dmp_time, obstacles)
         ucb.update(arm, reward)
@@ -161,7 +177,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
         if reward > 0:
             edges = []
             node = Node(x, y, t, 0, 1/reward)
-
+            # ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
             for i in range(0, len(sample_x)):
@@ -171,17 +187,31 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
 
                 dist_3d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2 + (t - t_out) ** 2)
                 dist_2d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2)
+                # if i == 0:
+                #     print("for i equal to zero distance 3D is: ", dist_3d)
+                #     print("distance 2D is: ", dist_2d)
 
                 if dist_3d < 10:
-                    if t_out < t:
-                        vel = dist_2d / (t - t_out)
-                        if v_min <= vel < v_max:
-                            edges.append(i)
-
-                    elif t_out > t:
+                    if t_out > t:
                         vel = dist_2d / (t_out - t)
                         if v_min <= vel < v_max:
-                            roadmap[i].append(len(sample_x))
+                            l = LineString([[x, y], [x_out, y_out]])
+                            for obstacle in obstacles:
+                                if not l.intersects(obstacle):
+                                    edges.append(i)
+                        #             if i == 0:
+                        #                 print("something added for roadmap[0]")
+                        # else:
+                        #     if i == 0:
+                        #         print("velocity not in range for i equal to zero")
+
+                    elif t_out < t:
+                        vel = dist_2d / (t - t_out)
+                        if v_min <= vel < v_max:
+                            l = LineString([[x, y], [x_out, y_out]])
+                            for obstacle in obstacles:
+                                if not l.intersects(obstacle):
+                                    roadmap[i].append(len(sample_x))
 
             roadmap.append(edges)
             vertices.append(node)
@@ -191,6 +221,8 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=200):
 
     print("length of sample_x is: ", len(sample_x))
     print("length of roadmap is: ", len(roadmap))
+
+    print("roadmap[0] is: ", roadmap[0])
 
     return sample_x, sample_y, sample_t, vertices, roadmap
 
@@ -218,7 +250,7 @@ def dijkstra_planning(start, goal, road_map, vertices, sample_x, sample_y, sampl
             ax.scatter(current.x, current.y, current.t)
             plt.pause(0.001)
 
-        if c_id == 1:
+        if c_id in range(1, 21):
             print("goal is found!")
             goal.pind = current.pind
             goal.cost = current.cost
@@ -305,8 +337,11 @@ def main(path_x=None, path_y=None):
     # start and goal position
     sx = 10.0  # [m]
     sy = 10.0  # [m]
+
+    # sx = 100.0
+    # sy = 100.0
     gx = 75.0  # [m]
-    gy = 50.0  # [m]
+    gy = 70.0  # [m]
 
     plot_paths = []
     legend_key = []
@@ -331,7 +366,7 @@ def main(path_x=None, path_y=None):
     plt2d.scatter(gx, gy)
     plt2d.annotate("new_fin", (gx, gy))
 
-    coords = [(50.0, 20.0), (50.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
+    coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
     poly1 = Polygon(coords)
 
     obstacles = [poly1]
