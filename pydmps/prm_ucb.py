@@ -10,7 +10,8 @@ from utils import get_trajectory, check_collision, avoid_obstacles
 from dmp_discrete import DMPs_discrete
 from mpl_toolkits.mplot3d import axes3d
 from scipy.stats import rv_continuous
-from prm import Node
+# from prm import Node
+from kdtree import Node, KDTree
 
 
 # parameter
@@ -20,10 +21,10 @@ MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 
 show_animation = True
 
-fig = plt.figure()
+fig = plt.figure(1)
 ax = fig.add_subplot(111, projection='3d')
 
-fig2 = plt.figure()
+fig2 = plt.figure(2)
 plt2d = fig2.add_subplot(111)
 
 
@@ -86,6 +87,7 @@ class UCB:
 
 
 def get_reward(x, y, t, dmp, obstacles=None):
+
     d = []
 
     for pt in dmp:
@@ -115,11 +117,11 @@ def get_reward(x, y, t, dmp, obstacles=None):
                 obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
 
     # cost += obstacle_cost
+    # print("reward returned is: ", (1/cost))
+    return 1/cost
 
-    return 1 / cost
 
-
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=5000):
+def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
 
     print("plan_ucb called..")
 
@@ -139,24 +141,36 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=5000):
     n_distributions = 2
     # n_distributions = len(dmp_time) + 1
     ucb.initialize(n_distributions)
-    sample_x = [start.x, goal.x]
-    sample_y = [start.y, goal.y]
-    sample_t = [start.t, goal.t]
+    # sample_x = [start.x, goal.x]
+    # sample_y = [start.y, goal.y]
+    # sample_t = [start.t, goal.t]
+    tree = KDTree()
+    tree.add(start.points[0][0], start.points[0][1])
+    tree.add(goal.points[0][0], goal.points[0][1])
 
-    # skdtree = KDTree(np.vstack((sample_x, sample_y, sample_t)).T)
+    print("start and goal added to the Kdtree..")
 
     vertices = [start, goal]
-    roadmap = [[], []]
+    roadmap = {0: [], 1: []}
+    # num_points_roadmap = 2
 
     for i in range(1, 20):
-        sample_x.append(goal.x)
-        sample_y.append(goal.y)
-        t = i * time_reso + goal.t
-        sample_t.append(t)
-        n = Node(goal.x, goal.y, t, i * time_reso, -1)
-        vertices.append(n)
-        roadmap.append([])
+        # sample_x.append(goal.x)
+        # sample_y.append(goal.y)
+        # print("goal.points[1] is: ", goal.points[1])
+        t = i * time_reso + goal.points[0][0][2]
+        # sample_t.append(t)
+        # n = Node(goal.x, goal.y, t, i * time_reso, -1)
+        n = Node([([goal.points[0][0][0], goal.points[0][0][1], t],
+                  [len(vertices), i * time_reso, -1])])
+        # print("point is: ", n.points[0][0])
+        # print("data is: ", n.points[0][1])
+        tree.add(n.points[0][0], n.points[0][1])
 
+        vertices.append(n)
+        roadmap[len(roadmap)] = []
+
+    # print("multiple goal nodes added to the roadmap..")
     while len(vertices) < num_points:
         arm = ucb.select_arm()
         # print("arm selected is ", arm)
@@ -176,85 +190,140 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=5000):
 
         if reward > 0:
             edges = []
-            node = Node(x, y, t, 0, 1/reward)
-            # ax.scatter(x, y, t)
+            node = Node([([x, y, t], [len(roadmap), 1/reward, None])])
+            # node = Node(x, y, t, 1/reward)
+            # print("cost of added node is: ", (1/reward))
+            ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
-            for i in range(0, len(sample_x)):
-                x_out = sample_x[i]
-                y_out = sample_y[i]
-                t_out = sample_t[i]
+            neighbors = tree.neighbors((x, y, t), 50)
+            # print("neighbors returned within 5 units radius")
+            # print("neighbors are: ", neighbors)
+            for n in neighbors:
+                # print("n.points is: ", n.points)
+                x_out = n[0][0]
+                y_out = n[0][1]
+                t_out = n[0][2]
 
-                dist_3d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2 + (t - t_out) ** 2)
                 dist_2d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2)
-                # if i == 0:
-                #     print("for i equal to zero distance 3D is: ", dist_3d)
-                #     print("distance 2D is: ", dist_2d)
+                if t_out > t:
+                    vel = dist_2d / (t_out - t)
+                    if v_min <= vel <= v_max:
+                        l = LineString([[x, y], [x_out, y_out]])
+                        for obstacle in obstacles:
+                            if not l.intersects(obstacle):
+                                edges.append(node.points[0][1][0])
 
-                if dist_3d < 10:
-                    if t_out > t:
-                        vel = dist_2d / (t_out - t)
-                        if v_min <= vel < v_max:
-                            l = LineString([[x, y], [x_out, y_out]])
-                            for obstacle in obstacles:
-                                if not l.intersects(obstacle):
-                                    edges.append(i)
-                        #             if i == 0:
-                        #                 print("something added for roadmap[0]")
-                        # else:
-                        #     if i == 0:
-                        #         print("velocity not in range for i equal to zero")
+                elif t_out < t:
+                    vel = dist_2d / (t - t_out)
+                    if v_min <= vel < v_max:
+                        l = LineString([[x, y], [x_out, y_out]])
+                        for obstacle in obstacles:
+                            if not l.intersects(obstacle):
+                                roadmap[n[1][0]].append(len(roadmap))
 
-                    elif t_out < t:
-                        vel = dist_2d / (t - t_out)
-                        if v_min <= vel < v_max:
-                            l = LineString([[x, y], [x_out, y_out]])
-                            for obstacle in obstacles:
-                                if not l.intersects(obstacle):
-                                    roadmap[i].append(len(sample_x))
+            # for i in range(0, len(sample_x)):
+            #     x_out = sample_x[i]
+            #     y_out = sample_y[i]
+            #     t_out = sample_t[i]
+            #
+            #     dist_3d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2 + (t - t_out) ** 2)
+            #     dist_2d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2)
+            #     # if i == 0:
+            #     #     print("for i equal to zero distance 3D is: ", dist_3d)
+            #     #     print("distance 2D is: ", dist_2d)
+            #
+            #     if dist_3d < 10:
+            #         if t_out > t:
+            #             vel = dist_2d / (t_out - t)
+            #             if v_min <= vel < v_max:
+            #                 l = LineString([[x, y], [x_out, y_out]])
+            #                 for obstacle in obstacles:
+            #                     if not l.intersects(obstacle):
+            #                         edges.append(i)
+            #             #             if i == 0:
+            #             #                 print("something added for roadmap[0]")
+            #             # else:
+            #             #     if i == 0:
+            #             #         print("velocity not in range for i equal to zero")
 
-            roadmap.append(edges)
+                    # elif t_out < t:
+                    #     vel = dist_2d / (t - t_out)
+                    #     if v_min <= vel < v_max:
+                    #         l = LineString([[x, y], [x_out, y_out]])
+                    #         for obstacle in obstacles:
+                    #             if not l.intersects(obstacle):
+                    #                 roadmap[i].append(len(sample_x))
+
+            tree.add(node.points[0][0], node.points[0][1])
+            roadmap[len(vertices)] = edges
             vertices.append(node)
-            sample_x.append(x)
-            sample_y.append(y)
-            sample_t.append(t)
+            # print("node added to roadmap and vertices array")
 
-    print("length of sample_x is: ", len(sample_x))
+            # # this block not required
+            # sample_x.append(x)
+            # sample_y.append(y)
+            # sample_t.append(t)
+
+    # print("length of sample_x is: ", len(sample_x))
     print("length of roadmap is: ", len(roadmap))
 
     print("roadmap[0] is: ", roadmap[0])
 
-    return sample_x, sample_y, sample_t, vertices, roadmap
+    # return sample_x, sample_y, sample_t, vertices, roadmap
+    return vertices, roadmap
 
 
-def dijkstra_planning(start, goal, road_map, vertices, sample_x, sample_y, sample_t, obstacles, v_max, v_min,
-                      dmp=None, dmp_vel=None):
+def dijkstra_planning(start, goal, road_map, vertices):
 
     # nstart = Node(sx, sy, 0.0, 0.0, -1)
     # ngoal = Node(gx, gy, 0.0, 0.0, -1)
 
+    print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
     openset[0] = start
+    print("added start node to the openset")
 
     while True:
         if not openset:
             print("Cannot find path")
             break
 
-        c_id = min(openset, key=lambda o: openset[o].cost)
+        # have to change the way cost is accessed
+        # c_id = min(openset, key=lambda o: openset[o].cost)
+        min = None
+        c_id = None
+        for k, v in openset.items():
+            cost = v.points[0][1][1]
+            if min is None:
+                min = cost
+                c_id = v.points[0][1][0]
+            else:
+                if cost < min:
+                    min = cost
+                    c_id = v.points[0][1][0]
+
+        # c_id = openset[openset.index(min([x.points[1][1] for key, x in openset.items()]))][1][0]
+        print("doing operations for c_id: ", c_id)
+        # c_id = min(openset, key=lambda o: openset[o][1][1])
         current = openset[c_id]
 
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
-            plt.plot(current.x, current.y, "xg")
-            ax.scatter(current.x, current.y, current.t)
+            plt2d.plot(current.points[0][0][0], current.points[0][0][1], "xg")
+            ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
             plt.pause(0.001)
 
         if c_id in range(1, 21):
             print("goal is found!")
-            goal.pind = current.pind
-            goal.cost = current.cost
-            goal.t = current.t
+            print("c_id is: ", c_id)
+            goal.points[0][1][2] = current.points[0][1][2]
+            goal.points[0][1][1] = current.points[0][1][1]
+            goal.points[0][0][2] = current.points[0][0][2]
+            # goal.pind = current.pind
+            # goal.cost = current.cost
+            # print("cost is: ", current.cost)
+            # goal.t = current.t
             break
 
         # Remove the item from the open set
@@ -262,55 +331,74 @@ def dijkstra_planning(start, goal, road_map, vertices, sample_x, sample_y, sampl
         # Add it to the closed set
         closedset[c_id] = current
 
-        # expand search grid based on motion model
         for i in range(len(road_map[c_id])):
             n_id = road_map[c_id][i]
-            # dx = sample_x[n_id] - current.x
-            # dy = sample_y[n_id] - current.y
-            # d = math.sqrt(dx**2 + dy**2)
-            # tmax = d/v_min
-            # tmin = d/v_max
-            # step = (tmax - tmin)/10
-
-            # for i in range(1, 11):
-            # delta_t = i * step
-            # dmp_cost = calculate_dmp_cost(current.x, current.y, current.t,  dx, dy, delta_t,
-            #                                 dmp, dmp_vel, obstacles)
+            # if n_id == 1:
+            #     print("goal at time o reached")
+            #     print("cost of the current node is: ", current.cost)
+            # if n_id in range(2, 19):
+            #     print("goal reached at non-zero time..")
+            #     print("cost of the current node is: ", current.cost)
 
             node = vertices[n_id]
-            node.cost += current.cost
-            node.pind = c_id
+            # node = vertices[n_id]
+            # print("cost of node before connection: ", node.cost)
+            # node.cost += current.cost
+            # print(vertices[c_id].points[0][1][1])
+            # temp = node.points[1][1]
+            node.points[0][1][1] += vertices[c_id].points[0][1][1]
+            # print("cost of node after connection: ", node.cost)
+            # node.pind = c_id
+            node.points[0][1][2] = c_id
 
             if n_id in closedset:
                 continue
             # Otherwise if it is already in the open set
             if n_id in openset:
-                if openset[n_id].cost > node.cost:
-                    openset[n_id].cost = node.cost
-                    openset[n_id].pind = c_id
+                if openset[n_id].points[0][1][1] > node.points[0][1][1]:
+                    openset[n_id].points[0][1][1] = node.points[0][1][1]
+                    openset[n_id].points[0][1][2] = c_id
+                # if openset[n_id].cost > node.cost:
+                #     openset[n_id].cost = node.cost
+                #     openset[n_id].pind = c_id
+
             else:
                 openset[n_id] = node
 
     # generate final course
-    rx, ry, rt = [goal.x], [goal.y], [goal.t]
-    pind = goal.pind
+
+    rx, ry, rt = [goal.points[0][0][0]], [goal.points[0][0][1]], [goal.points[0][0][2]]
+    pind = goal.points[0][1][2]
     while pind != -1:
         n = closedset[pind]
-        rx.append(n.x)
-        ry.append(n.y)
-        rt.append(n.t)
-        pind = n.pind
+        rx.append(n.points[0][0][0])
+        ry.append(n.points[0][0][1])
+        rt.append(n.points[0][0][2])
+        pind = n.points[0][1][2]
+
+    # rx, ry, rt = [goal.x], [goal.y], [goal.t]
+    # pind = goal.pind
+    # while pind != -1:
+    #     n = closedset[pind]
+    #     rx.append(n.x)
+    #     ry.append(n.y)
+    #     rt.append(n.t)
+    #     pind = n.pind
 
     return rx, ry, rt
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=None, dmp_vel=None):
 
-    start = Node(sx, sy, 0, 0, -1)
+    # declare node as ((x, y, t), (id, cost, pind))
+    start = Node([([sx, sy, 0], [0, 0, -1])])
+    # start = Node(sx, sy, 0, 0, -1)
 
     print("time at goal is: ", dmp_time[-1][2])
-    goal = Node(gx, gy, dmp_time[-1][2], 0, -1)
+    goal = Node([([gx, gy, dmp_time[-1][2]], [1, 0, -1])])
+    # goal = Node(gx, gy, dmp_time[-1][2], 0, -1)
 
+    print("start and goal nodes declared..")
     vel = []
     for v in dmp_vel:
         vel.append(math.sqrt(v[0] ** 2 + v[1] ** 2))
@@ -323,10 +411,10 @@ def PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=None, dmp_vel=None):
     print("vmax is: ", v_max)
     print("vmin is: ", v_min)
 
-    sample_x, sample_y, sample_t, vertices, roadmap = plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min)
+    # sample_x, sample_y, sample_t, vertices, roadmap = plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min)
 
-    rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, sample_x, sample_y, sample_t,
-                                   obstacles, dmp_time, dmp_vel)
+    vertices, roadmap = plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min)
+    rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices)
 
     return rx, ry, rt
 
@@ -366,7 +454,8 @@ def main(path_x=None, path_y=None):
     plt2d.scatter(gx, gy)
     plt2d.annotate("new_fin", (gx, gy))
 
-    coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
+    # coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
+    coords = [(50.0, 20.0), (50.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
     poly1 = Polygon(coords)
 
     obstacles = [poly1]
@@ -374,10 +463,10 @@ def main(path_x=None, path_y=None):
 
     for obstacle in obstacles:
         x, y = obstacle.exterior.xy
-        plt.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
+        plt2d.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
 
-    plt.plot(sx, sy, "xr")
-    plt.plot(gx, gy, "xb")
+    plt2d.plot(sx, sy, "xr")
+    plt2d.plot(gx, gy, "xb")
     plt.grid(True)
     plt.axis("equal")
     print("[INFO]: Plotted obstacles and start and end pts..")
@@ -449,9 +538,9 @@ def main(path_x=None, path_y=None):
     plt2d.plot(rx, ry)
     plt.show()
 
-    if show_animation:
-        plt.plot(rx, ry, "-r")
-        plt.show()
+    # if show_animation:
+    #     plt.plot(rx, ry, "-r")
+    #     plt.show()
 
 
 if __name__ == '__main__':
