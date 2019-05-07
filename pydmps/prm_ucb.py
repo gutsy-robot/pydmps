@@ -121,7 +121,7 @@ def get_reward(x, y, t, dmp, obstacles=None):
     return 1/cost
 
 
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
+def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
 
     print("plan_ucb called..")
 
@@ -166,7 +166,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
         # print("point is: ", n.points[0][0])
         # print("data is: ", n.points[0][1])
         tree.add(n.points[0][0], n.points[0][1])
-
+        print("added node with cid: ", len(vertices))
         vertices.append(n)
         roadmap[len(roadmap)] = []
 
@@ -196,7 +196,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
             ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
-            neighbors = tree.neighbors((x, y, t), 50)
+            neighbors = tree.neighbors((x, y, t), 10)
             # print("neighbors returned within 5 units radius")
             # print("neighbors are: ", neighbors)
             for n in neighbors:
@@ -212,7 +212,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
                         l = LineString([[x, y], [x_out, y_out]])
                         for obstacle in obstacles:
                             if not l.intersects(obstacle):
-                                edges.append(node.points[0][1][0])
+                                edges.append(n[1][0])
 
                 elif t_out < t:
                     vel = dist_2d / (t - t_out)
@@ -268,8 +268,8 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=1000):
     # print("length of sample_x is: ", len(sample_x))
     print("length of roadmap is: ", len(roadmap))
 
-    print("roadmap[0] is: ", roadmap[0])
-
+    print("roadmap[1] is: ", roadmap[1])
+    # print("one of the nodes are: ", vertices[roadmap[1][0]].points[0][0])
     # return sample_x, sample_y, sample_t, vertices, roadmap
     return vertices, roadmap
 
@@ -285,12 +285,15 @@ def dijkstra_planning(start, goal, road_map, vertices):
     print("added start node to the openset")
 
     while True:
+        # print("loop agained")
         if not openset:
+            print(openset)
             print("Cannot find path")
             break
 
         # have to change the way cost is accessed
         # c_id = min(openset, key=lambda o: openset[o].cost)
+        # print("length of openset is: ", len(openset))
         min = None
         c_id = None
         for k, v in openset.items():
@@ -298,14 +301,19 @@ def dijkstra_planning(start, goal, road_map, vertices):
             if min is None:
                 min = cost
                 c_id = v.points[0][1][0]
+                # print("cid is: ", c_id)
+
             else:
                 if cost < min:
                     min = cost
                     c_id = v.points[0][1][0]
+                    # print("cid is: ", c_id)
 
         # c_id = openset[openset.index(min([x.points[1][1] for key, x in openset.items()]))][1][0]
-        print("doing operations for c_id: ", c_id)
+        # print("doing operations for c_id: ", c_id)
         # c_id = min(openset, key=lambda o: openset[o][1][1])
+        if c_id in range(0, 21):
+            print('yes..')
         current = openset[c_id]
 
         # show graph
@@ -330,9 +338,13 @@ def dijkstra_planning(start, goal, road_map, vertices):
         del openset[c_id]
         # Add it to the closed set
         closedset[c_id] = current
+        # print("length of closedset is: ", len(closedset))
 
         for i in range(len(road_map[c_id])):
             n_id = road_map[c_id][i]
+            # print("ni_id is: ", n_id)
+            if n_id in range(1, 21):
+                print("goal pt reached..")
             # if n_id == 1:
             #     print("goal at time o reached")
             #     print("cost of the current node is: ", current.cost)
@@ -370,6 +382,7 @@ def dijkstra_planning(start, goal, road_map, vertices):
     rx, ry, rt = [goal.points[0][0][0]], [goal.points[0][0][1]], [goal.points[0][0][2]]
     pind = goal.points[0][1][2]
     while pind != -1:
+        print("entered inside while loop")
         n = closedset[pind]
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
@@ -455,7 +468,7 @@ def main(path_x=None, path_y=None):
     plt2d.annotate("new_fin", (gx, gy))
 
     # coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
-    coords = [(50.0, 20.0), (50.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
+    coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
     poly1 = Polygon(coords)
 
     obstacles = [poly1]
