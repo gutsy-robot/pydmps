@@ -27,6 +27,9 @@ ax = fig.add_subplot(111, projection='3d')
 fig2 = plt.figure(2)
 plt2d = fig2.add_subplot(111)
 
+fig3 = plt.figure(3)
+plt_ucb = fig3.add_subplot(111)
+
 
 def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
     mean = [x_dmp, y_dmp, t_dmp]
@@ -141,6 +144,8 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     n_distributions = 2
     # n_distributions = len(dmp_time) + 1
     ucb.initialize(n_distributions)
+    ucb1 = [0.0]
+    ucb2 = [0.0]
     # sample_x = [start.x, goal.x]
     # sample_y = [start.y, goal.y]
     # sample_t = [start.t, goal.t]
@@ -166,27 +171,31 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
         # print("point is: ", n.points[0][0])
         # print("data is: ", n.points[0][1])
         tree.add(n.points[0][0], n.points[0][1])
-        print("added node with cid: ", len(vertices))
+        # print("added node with cid: ", len(vertices))
         vertices.append(n)
         roadmap[len(roadmap)] = []
 
     # print("multiple goal nodes added to the roadmap..")
     while len(vertices) < num_points:
         arm = ucb.select_arm()
+        print("values are: ", ucb.values)
         # print("arm selected is ", arm)
         if arm == 0:
             x, y, t = sample_unform(0, 0, 0,
-                                    dmp_x_max + 10, dmp_y_max + 10, dmp_t_max + 0.1)
-
-        # else:
-        #     x, y, t = sample_dmp_normal(dmp_time[arm][0], dmp_time[arm][1], dmp_time[arm][2])
+                                    dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 0.1)
 
         else:
-            x, y, t = sample_unform(0, 0, 0,
-                                    dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 2)
+            i = random.randint(0, len(dmp_time) - 1)
+            x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
+
+        # else:
+        #     x, y, t = sample_unform(0, 0, 0,
+        #                             dmp_x_max + 2, dmp_y_max + 2, dmp_t_max + 0.5)
 
         reward = get_reward(x, y, t, dmp_time, obstacles)
         ucb.update(arm, reward)
+        ucb1.append(ucb.values[0] * 10000)
+        ucb2.append(ucb.values[1] * 10000)
 
         if reward > 0:
             edges = []
@@ -271,6 +280,11 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     print("roadmap[1] is: ", roadmap[1])
     # print("one of the nodes are: ", vertices[roadmap[1][0]].points[0][0])
     # return sample_x, sample_y, sample_t, vertices, roadmap
+    plt_ucb.plot(ucb1, 'bo')
+    plt_ucb.plot(ucb2, 'r+')
+    # print("ucb1 is: ", ucb1)
+    # print("ucb2 is: ", ucb2)
+    # plt_ucb.show()
     return vertices, roadmap
 
 
@@ -382,7 +396,7 @@ def dijkstra_planning(start, goal, road_map, vertices):
     rx, ry, rt = [goal.points[0][0][0]], [goal.points[0][0][1]], [goal.points[0][0][2]]
     pind = goal.points[0][1][2]
     while pind != -1:
-        print("entered inside while loop")
+        # print("entered inside while loop")
         n = closedset[pind]
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
@@ -455,7 +469,7 @@ def main(path_x=None, path_y=None):
     legend_key.append('original')
     ax.scatter(path_x[0], path_y[0], z[0][0])
     plt2d.scatter(path_x[0], path_y[0])
-    plt.annotate("st. original", (path_x[0], path_y[0]))
+    plt2d.annotate("st. original", (path_x[0], path_y[0]))
     ax.scatter(path_x[-1], path_y[-1], z[0][-1])
     plt2d.scatter(path_x[-1], path_y[-1])
     plt2d.annotate("f original.", (path_x[-1], path_y[-1]))
