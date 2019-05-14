@@ -171,8 +171,10 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
         t = i * time_reso + goal.points[0][0][2]
         # sample_t.append(t)
         # n = Node(goal.x, goal.y, t, i * time_reso, -1)
+
+        # the last -1 is to indicate the point is not from a particular distribution
         n = Node([([goal.points[0][0][0], goal.points[0][0][1], t],
-                  [len(vertices), i * time_reso, -1])])
+                  [len(vertices), i * time_reso, -1, -1])])
         tree.add(n.points[0][0], n.points[0][1])
         vertices.append(n)
         roadmap[len(roadmap)] = []
@@ -187,10 +189,8 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
+        # get the dmp-time proximity reward.
         reward = get_state_reward(x, y, t, dmp_time, obstacles)
-        # ucb.update(arm, reward)
-        # ucb1.append(ucb.values[0] * 10000)
-        # ucb2.append(ucb.values[1] * 10000)
 
         # ensures whether the sampled state is feasible.
         if reward > 0:
@@ -198,7 +198,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             # add the 2D node to the union find object
 
             edges = []
-            node = Node([([x, y, t], [len(roadmap), 1/reward, None])])
+            node = Node([([x, y, t], [len(roadmap), 1/reward, None, arm])])
             # node = Node(x, y, t, 1/reward)
             ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
@@ -260,24 +260,23 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             n_connected_components_new = uf.count()
 
             if n_connected_components_new < n_connected_components:
-                print("node reduced the number of connected components..")
-                reward *= 1.0
+                # print("node reduced the number of connected components..")
+                reward *= 1.5
 
             elif n_connected_components > n_connected_components:
-                print("node improved coverage of space..")
-                reward *= 1.0
+                # print("node improved coverage of space..")
+                reward *= 1.2
 
-            else:
-                print("node fell in a connected component..")
+            # else:
+            #     print("node fell in a connected component..")
 
             ucb.update(arm, reward)
+            ucb1.append(ucb.values[0] * 10000)
+            ucb2.append(ucb.values[1] * 10000)
 
             # print("node added to roadmap and vertices array")
 
     print("length of roadmap is: ", len(roadmap))
-
-    ucb1.append(ucb.values[0] * 10000)
-    ucb2.append(ucb.values[1] * 10000)
 
     print("roadmap[1] is: ", roadmap[1])
     plt_ucb.plot(ucb1, 'bo')
@@ -320,13 +319,25 @@ def dijkstra_planning(start, goal, road_map, vertices):
         # c_id = openset[openset.index(min([x.points[1][1] for key, x in openset.items()]))][1][0]
         # print("doing operations for c_id: ", c_id)
         # c_id = min(openset, key=lambda o: openset[o][1][1])
-        if c_id in range(0, 21):
-            print('yes..')
+        # if c_id in range(0, 21):
+        #     print('yes..')
         current = openset[c_id]
 
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
-            plt2d.plot(current.points[0][0][0], current.points[0][0][1], "xg")
+            # print("current.points[0][1] is: ", current.points[0][1])
+            if current.points[0][1][3] == -1:
+                print("distribution value is -1")
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
+
+            elif current.points[0][1][3] == 0:
+                print("distribution value is 0")
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g')
+
+            elif current.points[0][1][3] == 1:
+                print("distribution value is 1")
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r')
+
             ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
             plt.pause(0.001)
 
@@ -403,11 +414,11 @@ def dijkstra_planning(start, goal, road_map, vertices):
 def PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=None, dmp_vel=None):
 
     # declare node as ((x, y, t), (id, cost, pind))
-    start = Node([([sx, sy, 0], [0, 0, -1])])
+    start = Node([([sx, sy, 0], [0, 0, -1, -1])])
     # start = Node(sx, sy, 0, 0, -1)
 
     print("time at goal is: ", dmp_time[-1][2])
-    goal = Node([([gx, gy, dmp_time[-1][2]], [1, 0, -1])])
+    goal = Node([([gx, gy, dmp_time[-1][2]], [1, 0, -1, -1])])
     # goal = Node(gx, gy, dmp_time[-1][2], 0, -1)
 
     print("start and goal nodes declared..")
