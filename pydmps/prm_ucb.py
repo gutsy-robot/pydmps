@@ -12,6 +12,7 @@ from mpl_toolkits.mplot3d import axes3d
 from scipy.stats import rv_continuous
 # from prm import Node
 from kdtree import Node, KDTree
+from union_find import UF
 
 
 # parameter
@@ -29,6 +30,9 @@ plt2d = fig2.add_subplot(111)
 
 fig3 = plt.figure(3)
 plt_ucb = fig3.add_subplot(111)
+
+fig4 = plt.figure(4)
+plt_ucb_counts = fig4.add_subplot(111)
 
 
 def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
@@ -89,7 +93,11 @@ class UCB:
         return
 
 
-def get_reward(x, y, t, dmp, obstacles=None):
+def get_state_reward(x, y, t, dmp, obstacles=None):
+
+    if t < 0:
+        cost = 10000000000
+        return 1/cost
 
     d = []
 
@@ -108,8 +116,8 @@ def get_reward(x, y, t, dmp, obstacles=None):
         for obstacle in obstacles:
             point = Point((pt[0], pt[1]))
             if obstacle.contains(point):
-                cost = 0
-                return cost
+                cost = 100000000000
+                return 1/cost
             else:
                 pol_ext = LinearRing(obstacle.exterior.coords)
                 d = pol_ext.project(point)
@@ -146,9 +154,6 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     ucb.initialize(n_distributions)
     ucb1 = [0.0]
     ucb2 = [0.0]
-    # sample_x = [start.x, goal.x]
-    # sample_y = [start.y, goal.y]
-    # sample_t = [start.t, goal.t]
     tree = KDTree()
     tree.add(start.points[0][0], start.points[0][1])
     tree.add(goal.points[0][0], goal.points[0][1])
@@ -157,29 +162,23 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
 
     vertices = [start, goal]
     roadmap = {0: [], 1: []}
+    uf = UF(2)
     # num_points_roadmap = 2
 
-    for i in range(1, 20):
-        # sample_x.append(goal.x)
-        # sample_y.append(goal.y)
-        # print("goal.points[1] is: ", goal.points[1])
+    # add points for reaching the goal(x,y) at different times
+    num_goal_pts = 20
+    for i in range(1, num_goal_pts):
         t = i * time_reso + goal.points[0][0][2]
         # sample_t.append(t)
         # n = Node(goal.x, goal.y, t, i * time_reso, -1)
         n = Node([([goal.points[0][0][0], goal.points[0][0][1], t],
                   [len(vertices), i * time_reso, -1])])
-        # print("point is: ", n.points[0][0])
-        # print("data is: ", n.points[0][1])
         tree.add(n.points[0][0], n.points[0][1])
-        # print("added node with cid: ", len(vertices))
         vertices.append(n)
         roadmap[len(roadmap)] = []
 
-    # print("multiple goal nodes added to the roadmap..")
     while len(vertices) < num_points:
         arm = ucb.select_arm()
-        print("values are: ", ucb.values)
-        # print("arm selected is ", arm)
         if arm == 0:
             x, y, t = sample_unform(0, 0, 0,
                                     dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 0.1)
@@ -188,110 +187,105 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
-        # else:
-        #     x, y, t = sample_unform(0, 0, 0,
-        #                             dmp_x_max + 2, dmp_y_max + 2, dmp_t_max + 0.5)
+        reward = get_state_reward(x, y, t, dmp_time, obstacles)
+        # ucb.update(arm, reward)
+        # ucb1.append(ucb.values[0] * 10000)
+        # ucb2.append(ucb.values[1] * 10000)
 
-        reward = get_reward(x, y, t, dmp_time, obstacles)
-        ucb.update(arm, reward)
-        ucb1.append(ucb.values[0] * 10000)
-        ucb2.append(ucb.values[1] * 10000)
-
+        # ensures whether the sampled state is feasible.
         if reward > 0:
+
+            # add the 2D node to the union find object
+
             edges = []
             node = Node([([x, y, t], [len(roadmap), 1/reward, None])])
             # node = Node(x, y, t, 1/reward)
-            # print("cost of added node is: ", (1/reward))
             ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
+            n_connected_components = uf.count()
+            sampled_pt_id = len(roadmap) - num_goal_pts + 1
+            uf.add(sampled_pt_id)
             neighbors = tree.neighbors((x, y, t), 10)
-            # print("neighbors returned within 5 units radius")
-            # print("neighbors are: ", neighbors)
+
             for n in neighbors:
+                # neighbor_id = None
+
+                if n[1][0] == 0 or n[1][0] == 1:
+
+                    # if the points are the original start or goal the id in UF and roadmap is the same
+                    neighbor_id = n[1][0]
+
+                else:
+
+                    # otherwise account for the additional goals that were inserted into the roadmap
+                    neighbor_id = n[1][0] - num_goal_pts + 1
+
                 # print("n.points is: ", n.points)
                 x_out = n[0][0]
                 y_out = n[0][1]
                 t_out = n[0][2]
 
                 dist_2d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2)
+
                 if t_out > t:
                     vel = dist_2d / (t_out - t)
                     if v_min <= vel <= v_max:
                         l = LineString([[x, y], [x_out, y_out]])
+                        intersect = False
                         for obstacle in obstacles:
-                            if not l.intersects(obstacle):
-                                edges.append(n[1][0])
+                            if l.intersects(obstacle):
+                                intersect = True
+
+                        if not intersect:
+                            edges.append(n[1][0])
+                            uf.union(sampled_pt_id, neighbor_id)
 
                 elif t_out < t:
                     vel = dist_2d / (t - t_out)
                     if v_min <= vel < v_max:
                         l = LineString([[x, y], [x_out, y_out]])
+                        intersect = False
                         for obstacle in obstacles:
-                            if not l.intersects(obstacle):
+                            if l.intersects(obstacle):
+                                intersect = True
+
+                        if not intersect:
                                 roadmap[n[1][0]].append(len(roadmap))
-
-            # for i in range(0, len(sample_x)):
-            #     x_out = sample_x[i]
-            #     y_out = sample_y[i]
-            #     t_out = sample_t[i]
-            #
-            #     dist_3d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2 + (t - t_out) ** 2)
-            #     dist_2d = math.sqrt((x - x_out) ** 2 + (y - y_out) ** 2)
-            #     # if i == 0:
-            #     #     print("for i equal to zero distance 3D is: ", dist_3d)
-            #     #     print("distance 2D is: ", dist_2d)
-            #
-            #     if dist_3d < 10:
-            #         if t_out > t:
-            #             vel = dist_2d / (t_out - t)
-            #             if v_min <= vel < v_max:
-            #                 l = LineString([[x, y], [x_out, y_out]])
-            #                 for obstacle in obstacles:
-            #                     if not l.intersects(obstacle):
-            #                         edges.append(i)
-            #             #             if i == 0:
-            #             #                 print("something added for roadmap[0]")
-            #             # else:
-            #             #     if i == 0:
-            #             #         print("velocity not in range for i equal to zero")
-
-                    # elif t_out < t:
-                    #     vel = dist_2d / (t - t_out)
-                    #     if v_min <= vel < v_max:
-                    #         l = LineString([[x, y], [x_out, y_out]])
-                    #         for obstacle in obstacles:
-                    #             if not l.intersects(obstacle):
-                    #                 roadmap[i].append(len(sample_x))
+                                uf.union(sampled_pt_id, neighbor_id)
 
             tree.add(node.points[0][0], node.points[0][1])
             roadmap[len(vertices)] = edges
             vertices.append(node)
+            n_connected_components_new = uf.count()
+
+            if n_connected_components_new < n_connected_components:
+                print("node reduced the number of connected components..")
+                reward *= 1.0
+
+            elif n_connected_components > n_connected_components:
+                print("node improved coverage of space..")
+                reward *= 1.0
+
+            else:
+                print("node fell in a connected component..")
+
+            ucb.update(arm, reward)
+
             # print("node added to roadmap and vertices array")
 
-            # # this block not required
-            # sample_x.append(x)
-            # sample_y.append(y)
-            # sample_t.append(t)
-
-    # print("length of sample_x is: ", len(sample_x))
     print("length of roadmap is: ", len(roadmap))
 
+    ucb1.append(ucb.values[0] * 10000)
+    ucb2.append(ucb.values[1] * 10000)
+
     print("roadmap[1] is: ", roadmap[1])
-    # print("one of the nodes are: ", vertices[roadmap[1][0]].points[0][0])
-    # return sample_x, sample_y, sample_t, vertices, roadmap
     plt_ucb.plot(ucb1, 'bo')
     plt_ucb.plot(ucb2, 'r+')
-    # print("ucb1 is: ", ucb1)
-    # print("ucb2 is: ", ucb2)
-    # plt_ucb.show()
     return vertices, roadmap
 
 
 def dijkstra_planning(start, goal, road_map, vertices):
-
-    # nstart = Node(sx, sy, 0.0, 0.0, -1)
-    # ngoal = Node(gx, gy, 0.0, 0.0, -1)
 
     print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
@@ -402,15 +396,6 @@ def dijkstra_planning(start, goal, road_map, vertices):
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
         pind = n.points[0][1][2]
-
-    # rx, ry, rt = [goal.x], [goal.y], [goal.t]
-    # pind = goal.pind
-    # while pind != -1:
-    #     n = closedset[pind]
-    #     rx.append(n.x)
-    #     ry.append(n.y)
-    #     rt.append(n.t)
-    #     pind = n.pind
 
     return rx, ry, rt
 
