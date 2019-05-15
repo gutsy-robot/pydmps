@@ -36,7 +36,7 @@ class Node(object):
         return str(self.x) + "," + str(self.y) + "," + str(self.t) + "," + str(self.cost) + "," + str(self.pind)
 
 
-def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, reso_time=0.01, cost_type="default", dmp=None,
+def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, reso_time=0.1, cost_type="default", dmp=None,
                       dmp_vel=None):
     """
     :param sx: start x coordinate
@@ -205,33 +205,12 @@ def calc_index(node, xwidth, xmin, ymin):
 
 
 def get_motion_model():
-    # dx, dy, cost
-    # motion = [[1, 0, 0, 1],
-    #           [0, 1, 0, 1],
-    #           [-1, 0, 0, 1],
-    #           [0, -1, 0, 1],
-    #           [0, 0, 1, 1],
-    #           [-1, -1, 0, math.sqrt(2)],
-    #           [-1, 1, 0, math.sqrt(2)],
-    #           [1, -1, 0, math.sqrt(2)],
-    #           [1, 1, 0, math.sqrt(2)],
-    #           [1, 0, 1, math.sqrt(2)],
-    #           [-1, 0, 1, math.sqrt(2)],
-    #           [0, 1, 1, math.sqrt(2)],
-    #           [0, -1, 1, math.sqrt(2)]]
-              # [1, 1, 1, math.sqrt(3)],
-              # [-1, 1, 1, math.sqrt(3)],
-              # [-1, -1, 1, math.sqrt(3)],
-              # [-1, 1, -1, math.sqrt(3)],
-              # [-1, -1, -1, math.sqrt(3)],
-              # [1, -1, 1, math.sqrt(3)],
-              # [1, -1, -1, math.sqrt(3)],
-              # [1, 1, -1, math.sqrt(3)]]
-    motion = [[0, 0, 1, 1],
-              [1, 0, 1, math.sqrt(2)],
+
+    motion = [[1, 0, 1, math.sqrt(2)],
               [-1, 0, 1, math.sqrt(2)],
               [0, 1, 1, math.sqrt(2)],
-              [0, -1, 1, math.sqrt(2)]]
+              [0, -1, 1, math.sqrt(2)],
+              [0, 0, 1, 1]]
     return motion
 
 
@@ -256,7 +235,7 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
     for pt in dmp:
         # print("cost due to time is:  ", (t - pt[2]) ** 2)
         # print("cost due to x is:  ", (x - pt[0]) ** 2)
-        distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2 + (t - pt[2]) ** 2)
+        distance = sqrt((x + motion_x - pt[0]) ** 2 + (y + motion_y - pt[1]) ** 2 + (t + delta_t - pt[2]) ** 2)
         d.append(distance)
 
     d = np.array(d)
@@ -267,9 +246,20 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
     vx = motion_x/ delta_t
     vy = motion_y/ delta_t
 
+    d_vel = []
+
+    for pt in dmp:
+        # print("cost due to time is:  ", (t - pt[2]) ** 2)
+        # print("cost due to x is:  ", (x - pt[0]) ** 2)
+        distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2 + (t - pt[2]) ** 2)
+        d_vel.append(distance)
+
+    d_vel = np.array(d_vel)
+
+    min_index_vel = np.argmin(d_vel)
+
     cost = sqrt((x + motion_x - dmp[min_index][0]) ** 2 + (y + motion_y - dmp[min_index][1]) ** 2 +
-                # (vx - dmp_vel[min_index][0]) ** 2 + (vy - dmp_vel[min_index][1]) ** 2)
-                (t + delta_t - dmp[min_index][2]) ** 2)
+                (vx - dmp_vel[min_index_vel][0]) ** 2 + (vy - dmp_vel[min_index_vel][1]) ** 2)
 
     obstacle_cost = 0
     if obstacles is not None:
@@ -284,15 +274,15 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
 
     # print("obstacle cost is: ", obstacle_cost)
 
-    # # cost += obstacle_cost
+    cost += obstacle_cost
 
     # print("total cost is: ", cost)
 
     return cost, min_index
 
 
-def main(sx=40.0, sy=10.0, gx=30.0,
-         gy=50.0, grid_size=1.0, cost_type="default", path_x=None, path_y=None):
+def main(sx=20.0, sy=10.0, gx=45.0,
+         gy=60.0, grid_size=1.0, cost_type="default", path_x=None, path_y=None):
 
     plot_paths = []
     legend_key = []
@@ -318,7 +308,7 @@ def main(sx=40.0, sy=10.0, gx=30.0,
     plt2d.scatter(gx, gy)
     plt2d.annotate("new_fin", (gx, gy))
 
-    coords = [(50.0, 20.0), (50.0, 40.0), (60.0, 40.0), (60.0, 20.0)]
+    coords = [(100.0, 20.0), (100.0, 40.0), (160.0, 40.0), (160.0, 20.0)]
     poly1 = Polygon(coords)
 
     obstacles = [poly1]
@@ -377,8 +367,8 @@ def main(sx=40.0, sy=10.0, gx=30.0,
     for i in range(0, len(y_track_nc)):
         temp = list(y_track_nc[i])
         temp_vel = list(dy_track_nc[i])
-        temp.append(i * dmp.dt)
-        temp_vel.append(i * dmp.dt)
+        temp.append((i + 1) * dmp.dt)
+        temp_vel.append((i + 1) * dmp.dt)
         dmp_dy_time_para.append(temp_vel)
         dmp_time_para.append(temp)
     
