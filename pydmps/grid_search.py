@@ -326,7 +326,7 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
     if cost_type == "dmp_traj":
         for ii, bfs in enumerate(n_bfs):
             dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs, dt=0.01, run_time=1.0)
-            
+
             dmp.imitate_path(y_des=np.array([path_x, path_y]))
             dmp.y0[0] = sx
             dmp.y0[1] = sy
