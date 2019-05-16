@@ -205,8 +205,10 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
 
             n_connected_components = uf.count()
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
+            # print("id of point being added to the union find is: ", sampled_pt_id)
             uf.add(sampled_pt_id)
             neighbors = tree.neighbors((x, y, t), 10)
+            # print("length of neigbors is: ", len(neighbors))
 
             for n in neighbors:
                 # neighbor_id = None
@@ -216,6 +218,8 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
                     # if the points are the original start or goal the id in UF and roadmap is the same
                     neighbor_id = n[1][0]
 
+                elif 1 < n[1][0] <= num_goal_pts:
+                    neighbor_id = goal.points[0][1][0]
                 else:
 
                     # otherwise account for the additional goals that were inserted into the roadmap
@@ -327,15 +331,15 @@ def dijkstra_planning(start, goal, road_map, vertices):
         if show_animation and len(closedset.keys()) % 2 == 0:
             # print("current.points[0][1] is: ", current.points[0][1])
             if current.points[0][1][3] == -1:
-                print("distribution value is -1")
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
-
-            elif current.points[0][1][3] == 0:
-                print("distribution value is 0")
+                # print("distribution value is -1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g')
 
+            elif current.points[0][1][3] == 0:
+                # print("distribution value is 0")
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
+
             elif current.points[0][1][3] == 1:
-                print("distribution value is 1")
+                # print("distribution value is 1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r')
 
             ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
