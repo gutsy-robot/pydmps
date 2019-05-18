@@ -1,16 +1,14 @@
 import pandas as pd
-# from utils import get_trajectory
 from dmp_discrete import DMPs_discrete
 import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry.polygon import LinearRing, Polygon
 from shapely.geometry import Point, mapping
-# from grid_search import Node
-# from grid_search
-
+import random
+import math
 
 def get_trajectory(csvfile):
-    print("get trajectory called...")
+    # print("get trajectory called...")
     path_x = []
     path_y = []
 
@@ -21,14 +19,17 @@ def get_trajectory(csvfile):
     for i in range(0, len(recorded_path_x)):
         if i == 0:
             print(recorded_path_x[i])
-            path_x.append((recorded_path_x[i] * 10.0))
-            path_y.append((recorded_path_y[i] * 10.0))
-            print("first entry succedded..")
+
+            # used it with * 10.0 for dmp_rrt.py might wanna change it back later.
+
+            path_x.append((recorded_path_x[i]))
+            path_y.append((recorded_path_y[i]))
+            # print("first entry succedded..")
 
         else:
             if path_x[-1] != recorded_path_x[i] or path_y[-1] != recorded_path_y[i]:
-                path_x.append((recorded_path_x[i] * 10.0))
-                path_y.append((recorded_path_y[i] * 10.0))
+                path_x.append((recorded_path_x[i]))
+                path_y.append((recorded_path_y[i]))
 
     return path_x, path_y
 
@@ -152,6 +153,61 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
     plt.show()
 
 
+# def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
+#
+#     """
+#
+#     :param y: position
+#     :param dy: velocity
+#     :param goal: goal coordinates
+#     :param obstacles: list of shapely polygons
+#     :param beta: constant
+#     :param gamma: constant
+#     :return:
+#     """
+#
+#     obst_closest_pts = []
+#     pot = np.zeros(2)
+#     for i in range(0, len(obstacles)):
+#         obstacle = obstacles[i]
+#
+#         if np.linalg.norm(dy) > 1e-5:
+#             phi_dy = -np.arctan2(dy[1], dy[0])
+#             R_dy = np.array([[np.cos(phi_dy), -np.sin(phi_dy)],
+#                              [np.sin(phi_dy), np.cos(phi_dy)]])
+#
+#             # calculate vector to object relative to body
+#
+#             pol_ext = LinearRing(obstacle.exterior.coords)
+#             d = pol_ext.project(Point(tuple(y)))
+#             p = pol_ext.interpolate(d)
+#             obst_potential_pt = list(p.coords)[0]
+#             # print("closest pt to the obstacle is: ", obst_potential_pt)
+#             obst_closest_pts.append(obst_potential_pt)
+#             # print("appended point is: ", obst_potential_pt)
+#             obj_vec = obst_potential_pt - y
+#             # rotate it by the direction we're going
+#             obj_vec = np.dot(R_dy, obj_vec)
+#             # calculate the angle of obj relative to the direction we're going
+#             phi = np.arctan2(obj_vec[1], obj_vec[0])
+#
+#             dphi = gamma * np.exp(-beta * abs(phi))
+#             R = np.dot(R_halfpi, np.outer(obst_potential_pt - y, dy))
+#             pval = -np.nan_to_num(np.dot(R, dy) * dphi)
+#
+#             # print("pval is: ", pval)
+#
+#             # check to see if the distance to the obstacle is further than
+#             # the distance to the target, if it is, ignore the obstacle
+#             if np.linalg.norm(obj_vec) > np.linalg.norm(goal - y):
+#                 pval = 0
+#
+#             pot += pval
+#     # print("p is: ", p)
+#     # print("returned obst_closest_pts are: ", obst_closest_pts)
+#     return pot, obst_closest_pts
+
+
 def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
 
     """
@@ -244,3 +300,26 @@ def check_collision(path_points, obstacles):
             break
 
     return collision
+
+
+def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
+    mean = [x_dmp, y_dmp, t_dmp]
+    cov = [[20, 0, 0], [0, 20, 0], [0, 0, 0.1]]
+    x, y, t = np.random.multivariate_normal(mean, cov, 1).T
+
+    return x, y, t
+
+
+def sample_uniform(minx, miny, mint, maxx, maxy, maxt):
+    x = (random.random() - minx) * (maxx - minx)
+    y = (random.random() - miny) * (maxy - miny)
+    t = (random.random() - mint) * (maxt - mint)
+    # if math.sqrt((x - 10.0) ** 2 + (y - 10.0) ** 2 + t **2) < 9.0:
+    #     print("point sampled should be in the roadmap of t[0]")
+
+    return x, y, t
+
+
+def ind_max(x):
+    m = max(x)
+    return x.index(m)

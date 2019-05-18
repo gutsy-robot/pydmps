@@ -1,19 +1,15 @@
 import random
 import math
 import numpy as np
-import scipy.spatial
 import matplotlib.pyplot as plt
 from shapely.geometry.polygon import LinearRing, Polygon, LineString
 from shapely.geometry import Point, mapping
 from math import sqrt, ceil, floor
-from utils import get_trajectory, check_collision, avoid_obstacles
+from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, ind_max
 from dmp_discrete import DMPs_discrete
-from mpl_toolkits.mplot3d import axes3d
-from scipy.stats import rv_continuous
-# from prm import Node
 from kdtree import Node, KDTree
 from union_find import UF
-
+from ucb import UCB
 
 # parameter
 N_SAMPLE = 500  # number of sample_points
@@ -22,75 +18,17 @@ MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 
 show_animation = True
 
-fig = plt.figure(1)
-ax = fig.add_subplot(111, projection='3d')
+# fig = plt.figure(1)
+# ax = fig.add_subplot(111, projection='3d')
 
-fig2 = plt.figure(2)
+fig2 = plt.figure(1)
 plt2d = fig2.add_subplot(111)
 
-fig3 = plt.figure(3)
+fig3 = plt.figure(2)
 plt_ucb = fig3.add_subplot(111)
 
-fig4 = plt.figure(4)
-plt_ucb_counts = fig4.add_subplot(111)
-
-
-def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
-    mean = [x_dmp, y_dmp, t_dmp]
-    cov = [[10, 0, 0], [0, 10, 0], [0, 0, 0.1]]
-    x, y, t = np.random.multivariate_normal(mean, cov, 1).T
-
-    return x, y, t
-
-
-def sample_unform(minx, miny, mint, maxx, maxy, maxt):
-    x = (random.random() - minx) * (maxx - minx)
-    y = (random.random() - miny) * (maxy - miny)
-    t = (random.random() - mint) * (maxt - mint)
-    # if math.sqrt((x - 10.0) ** 2 + (y - 10.0) ** 2 + t **2) < 9.0:
-    #     print("point sampled should be in the roadmap of t[0]")
-
-    return x, y, t
-
-
-def ind_max(x):
-    m = max(x)
-    return x.index(m)
-
-
-class UCB:
-    def __init__(self, counts=None, values=None):
-        self.counts = counts
-        self.values = values
-        return
-
-    def initialize(self, n_arms):
-        self.counts = [0 for col in range(n_arms)]
-        self.values = [0.0 for col in range(n_arms)]
-
-        return
-
-    def select_arm(self):
-        n_arms = len(self.counts)
-        for arm in range(n_arms):
-            if self.counts[arm] == 0:
-                return arm
-
-        ucb_values = [0.0 for arm in range(n_arms)]
-        total_counts = sum(self.counts)
-        for arm in range(n_arms):
-            bonus = math.sqrt((2 * math.log(total_counts)) / float(self.counts[arm]))
-            ucb_values[arm] = self.values[arm] + bonus
-        return ind_max(ucb_values)
-
-    def update(self, chosen_arm, reward):
-        self.counts[chosen_arm] = self.counts[chosen_arm] + 1
-        n = self.counts[chosen_arm]
-
-        value = self.values[chosen_arm]
-        new_value = ((n - 1) / float(n)) * value + (1 / float(n)) * reward
-        self.values[chosen_arm] = new_value
-        return
+# fig4 = plt.figure(4)
+# plt_ucb_counts = fig4.add_subplot(111)
 
 
 def get_state_reward(x, y, t, dmp, obstacles=None):
@@ -128,11 +66,10 @@ def get_state_reward(x, y, t, dmp, obstacles=None):
                 obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
 
     # cost += obstacle_cost
-    # print("reward returned is: ", (1/cost))
-    return 1/cost
+    return (1/cost)/1000
 
 
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
+def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=10000):
 
     print("plan_ucb called..")
 
@@ -182,7 +119,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     while len(vertices) < num_points:
         arm = ucb.select_arm()
         if arm == 0:
-            x, y, t = sample_unform(0, 0, 0,
+            x, y, t = sample_uniform(0, 0, 0,
                                     dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 0.1)
 
         else:
@@ -200,7 +137,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             edges = []
             node = Node([([x, y, t], [len(roadmap), 1/reward, None, arm])])
             # node = Node(x, y, t, 1/reward)
-            ax.scatter(x, y, t)
+            # ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
             n_connected_components = uf.count()
@@ -274,17 +211,19 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             # else:
             #     print("node fell in a connected component..")
 
-            ucb.update(arm, reward)
+        ucb.update(arm, reward)
+        if arm == 0:
             ucb1.append(ucb.values[0] * 10000)
-            ucb2.append(ucb.values[1] * 10000)
+            ucb2.append(ucb2)
 
-            # print("node added to roadmap and vertices array")
+        elif arm == 1:
+            ucb2.append(ucb.values[1] * 10000)
 
     print("length of roadmap is: ", len(roadmap))
 
-    print("roadmap[1] is: ", roadmap[1])
     plt_ucb.plot(ucb1, 'bo')
     plt_ucb.plot(ucb2, 'r+')
+    # plt.show()
     return vertices, roadmap
 
 
@@ -333,17 +272,19 @@ def dijkstra_planning(start, goal, road_map, vertices):
             if current.points[0][1][3] == -1:
                 # print("distribution value is -1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g')
+                # plt2d.pause(0.001)
 
             elif current.points[0][1][3] == 0:
                 # print("distribution value is 0")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
+                # plt.pause(0.001)
 
             elif current.points[0][1][3] == 1:
                 # print("distribution value is 1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r')
+                # plt.pause(0.001)
 
-            ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
-            plt.pause(0.001)
+            # ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
 
         if c_id in range(1, 21):
             print("goal is found!")
@@ -463,18 +404,18 @@ def main(path_x=None, path_y=None):
 
     z = np.zeros((1, len(path_x)))
 
-    orig_path = ax.plot_wireframe(np.array(path_x), np.array(path_y), z, '--', linewidth=2)
+    # orig_path = ax.plot_wireframe(np.array(path_x), np.array(path_y), z, '--', linewidth=2)
     plt2d.plot(path_x, path_y, '--', linewidth=2)
-    plot_paths.append(orig_path)
+    # plot_paths.append(orig_path)
     legend_key.append('original')
-    ax.scatter(path_x[0], path_y[0], z[0][0])
+    # ax.scatter(path_x[0], path_y[0], z[0][0])
     plt2d.scatter(path_x[0], path_y[0])
     plt2d.annotate("st. original", (path_x[0], path_y[0]))
-    ax.scatter(path_x[-1], path_y[-1], z[0][-1])
+    # ax.scatter(path_x[-1], path_y[-1], z[0][-1])
     plt2d.scatter(path_x[-1], path_y[-1])
     plt2d.annotate("f original.", (path_x[-1], path_y[-1]))
 
-    ax.scatter(sx, sy, 0.0)
+    # ax.scatter(sx, sy, 0.0)
     plt2d.scatter(sx, sy)
     plt2d.annotate("new_st", (sx, sy))
 
@@ -482,10 +423,13 @@ def main(path_x=None, path_y=None):
     plt2d.annotate("new_fin", (gx, gy))
 
     # coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
-    coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
+    coords = [(50.0, 30.0), (50.0, 40.0), (60.0, 40.0), (60.0, 30.0)]
     poly1 = Polygon(coords)
 
-    obstacles = [poly1]
+    coords2 = [(25.0, 15.0), (25.0, 25.0), (35.0, 25.0), (35.0, 15.0)]
+    poly2 = Polygon(coords2)
+
+    obstacles = [poly1, poly2]
     print("[INFO]: obstacles created")
 
     for obstacle in obstacles:
@@ -494,8 +438,8 @@ def main(path_x=None, path_y=None):
 
     plt2d.plot(sx, sy, "xr")
     plt2d.plot(gx, gy, "xb")
-    plt.grid(True)
-    plt.axis("equal")
+    plt2d.grid(True)
+    plt2d.axis("equal")
     print("[INFO]: Plotted obstacles and start and end pts..")
 
     dmp = DMPs_discrete(n_dmps=2, n_bfs=100, dt=0.01, run_time=1.0)
@@ -525,12 +469,12 @@ def main(path_x=None, path_y=None):
     y_track_nc_x = np.array(y_track_nc[:, 0])
     y_track_nc_y = np.array(y_track_nc[:, 1])
 
-    ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
-    # ax.plot_wireframe(y_track_nc_x, y_track_nc_y, y_track_nc_time)
-    plot = ax.plot_wireframe(y_track_nc_x, y_track_nc_y, np.zeros((1, len(y_track_nc))))
+    # ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
+    # # ax.plot_wireframe(y_track_nc_x, y_track_nc_y, y_track_nc_time)
+    # plot = ax.plot_wireframe(y_track_nc_x, y_track_nc_y, np.zeros((1, len(y_track_nc))))
     plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y)
     plt2d.scatter(y_track_nc_x, y_track_nc_y)
-    plot_paths.append(plot)
+    # plot_paths.append(plot)
     legend_key.append('dmp')
     # plt.show()
     # dmp_res = dmp.dt
@@ -558,8 +502,8 @@ def main(path_x=None, path_y=None):
     print("shape of rx is: ", rx.shape)
 
     print("rt is: ", rt)
-    plot = ax.plot_wireframe(rx, ry, rt)
-    plot_paths.append(plot)
+    # plot = ax.plot_wireframe(rx, ry, rt)
+    # plot_paths.append(plot)
     legend_key.append('dijkstra')
     # plt.legend(plot_paths, legend_key, loc='lower right')
     plt2d.plot(rx, ry)
