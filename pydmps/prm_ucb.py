@@ -69,7 +69,7 @@ def get_state_reward(x, y, t, dmp, obstacles=None):
     return (1/cost)/1000
 
 
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=10000):
+def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
 
     print("plan_ucb called..")
 
@@ -144,7 +144,7 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=10000):
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
             # print("id of point being added to the union find is: ", sampled_pt_id)
             uf.add(sampled_pt_id)
-            neighbors = tree.neighbors((x, y, t), 10)
+            neighbors = tree.neighbors((x, y, t), 5)
             # print("length of neigbors is: ", len(neighbors))
 
             for n in neighbors:
@@ -212,17 +212,14 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=10000):
             #     print("node fell in a connected component..")
 
         ucb.update(arm, reward)
-        if arm == 0:
-            ucb1.append(ucb.values[0] * 10000)
-            ucb2.append(ucb2)
-
-        elif arm == 1:
-            ucb2.append(ucb.values[1] * 10000)
+        ucb1.append(ucb.values[0])
+        ucb2.append(ucb.values[1])
 
     print("length of roadmap is: ", len(roadmap))
 
     plt_ucb.plot(ucb1, 'bo')
     plt_ucb.plot(ucb2, 'r+')
+    print("plt_ucb done..")
     # plt.show()
     return vertices, roadmap
 
