@@ -64,8 +64,13 @@ class UF:
         """
 
         id = self._id
+        # print("calling find..")
+        # print("length of id is: ", len(id))
+        # print("p is: ", p)
         while p != id[p]:
             p = id[p] = id[id[p]]   # Path compression using halving.
+            # print("after assignment p is: ", p)
+            # print("length of id is: ", len(id))
         return p
 
     def count(self):
@@ -80,7 +85,7 @@ class UF:
 
     def union(self, p, q):
         """Combine sets containing p and q into a single set."""
-
+        # print("calling union on: ", (p, q))
         id = self._id
         rank = self._rank
 
@@ -110,3 +115,4 @@ class UF:
     def __repr__(self):
         """Representation of the union find object."""
         return "UF(" + str(self) + ")"
+
