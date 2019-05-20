@@ -1,6 +1,7 @@
 import math
 from utils import ind_max
 
+
 class UCB:
 
     def __init__(self, counts=None, values=None):
@@ -22,14 +23,15 @@ class UCB:
         n_arms = len(self.counts)
         for arm in range(n_arms):
             if self.counts[arm] == 0:
-                return arm
+                return arm, None
 
         ucb_values = [0.0 for arm in range(n_arms)]
         total_counts = sum(self.counts)
         for arm in range(n_arms):
             bonus = math.sqrt((2 * math.log(total_counts)) / float(self.counts[arm]))
             ucb_values[arm] = self.values[arm] + bonus
-        return ind_max(ucb_values)
+
+        return ind_max(ucb_values), ucb_values
 
     def update(self, chosen_arm, reward):
         self.counts[chosen_arm] = self.counts[chosen_arm] + 1
