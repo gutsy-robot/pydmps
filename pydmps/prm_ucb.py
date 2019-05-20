@@ -11,68 +11,82 @@ from kdtree import Node, KDTree
 from union_find import UF
 from ucb import UCB
 
-# parameter
 N_SAMPLE = 500  # number of sample_points
 N_KNN = 80  # number of edge from one sampled point
 MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 
 show_animation = True
 
-# fig = plt.figure(1)
-# ax = fig.add_subplot(111, projection='3d')
+fig1 = plt.figure(1)
+plt2d = fig1.add_subplot(111)
 
-fig2 = plt.figure(1)
-plt2d = fig2.add_subplot(111)
+fig2 = plt.figure(2)
+plt_mean_reward = fig2.add_subplot(111)
 
-fig3 = plt.figure(2)
-plt_ucb = fig3.add_subplot(111)
+fig3 = plt.figure(3)
+plt_increemental_reward = fig3.add_subplot(111)
 
-# fig4 = plt.figure(4)
-# plt_ucb_counts = fig4.add_subplot(111)
+fig4 = plt.figure(4)
+plt_connectivity_reward = fig4.add_subplot(111)
+
+fig5 = plt.figure(5)
+plt_ucb = fig5.add_subplot(111)
 
 
-def get_state_reward(x, y, t, dmp, obstacles=None):
+def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None):
 
     if t < 0:
-        cost = 10000000000
-        return 1/cost
+        return 1/1000000
 
-    d = []
+    cost_total = 0.0
+    for i in range(0, len(guiding_paths)):
+        guiding_path = guiding_paths[i]
+        weight = weights[i]
 
-    for pt in dmp:
-        distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2 + (t - pt[2]) ** 2)
-        d.append(distance)
+        d = []
 
-    d = np.array(d)
+        for pt in guiding_path:
+            distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2 + (t - pt[2]) ** 2)
+            d.append(distance)
 
-    min_index = np.argmin(d)
-    cost = sqrt((x - dmp[min_index][0]) ** 2 + (y - dmp[min_index][1]) ** 2
-                + (t - dmp[min_index][2]) ** 2)
+        d = np.array(d)
 
-    obstacle_cost = 0
-    if obstacles is not None:
-        for obstacle in obstacles:
-            point = Point((pt[0], pt[1]))
-            if obstacle.contains(point):
-                cost = 100000000000
-                return 1/cost
-            else:
-                pol_ext = LinearRing(obstacle.exterior.coords)
-                d = pol_ext.project(point)
-                p = pol_ext.interpolate(d)
-                obst_potential_pt = list(p.coords)[0]
-                dist = sqrt((y - obst_potential_pt[1]) ** 2 +
-                            (x - obst_potential_pt[0]) ** 2)
-                obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
+        min_index = np.argmin(d)
+        cost = sqrt((x - guiding_path[min_index][0]) ** 2 + (y - guiding_path[min_index][1]) ** 2
+                    + (t - guiding_path[min_index][2]) ** 2)
 
-    # cost += obstacle_cost
-    return (1/cost)/1000
+        obstacle_cost = 0
+        if obstacles is not None:
+            for obstacle in obstacles:
+                point = Point((pt[0], pt[1]))
+
+                if obstacle.contains(point):
+                    return 1/1000000
+
+                else:
+
+                    pol_ext = LinearRing(obstacle.exterior.coords)
+                    d = pol_ext.project(point)
+                    p = pol_ext.interpolate(d)
+                    obst_potential_pt = list(p.coords)[0]
+                    dist = sqrt((y - obst_potential_pt[1]) ** 2 +
+                                (x - obst_potential_pt[0]) ** 2)
+                    obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
+
+        # cost += obstacle_cost
+        cost_total += weight * cost
+
+    return (1/cost_total)/1000
 
 
-def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
+def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
+             reward_weights={'connectivity': 1.0, 'increemental': 1.0}, guiding_path_weights=[1.0],
+             ucb=None):
 
     print("plan_ucb called..")
+    print("total number of nodes in the roadmap should be: ", num_points)
 
+    dmp_time = guiding_paths[0]
     time_reso = dmp_time[1][2] - dmp_time[0][2]
     dmp_x_min = np.min(dmp_time[:, 0])
     dmp_y_min = np.min(dmp_time[:, 1])
@@ -85,12 +99,6 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
     print("max for uniform distribution is: ", (dmp_x_max, dmp_y_max, dmp_t_max))
 
-    ucb = UCB()
-    n_distributions = 2
-    # n_distributions = len(dmp_time) + 1
-    ucb.initialize(n_distributions)
-    ucb1 = [0.0]
-    ucb2 = [0.0]
     tree = KDTree()
     tree.add(start.points[0][0], start.points[0][1])
     tree.add(goal.points[0][0], goal.points[0][1])
@@ -100,14 +108,16 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
     vertices = [start, goal]
     roadmap = {0: [], 1: []}
     uf = UF(2)
-    # num_points_roadmap = 2
+    mean1 = [ucb.values[0]]
+    mean2 = [ucb.values[1]]
+
+    ucb1 = []
+    ucb2 = []
 
     # add points for reaching the goal(x,y) at different times
     num_goal_pts = 20
     for i in range(1, num_goal_pts):
         t = i * time_reso + goal.points[0][0][2]
-        # sample_t.append(t)
-        # n = Node(goal.x, goal.y, t, i * time_reso, -1)
 
         # the last -1 is to indicate the point is not from a particular distribution
         n = Node([([goal.points[0][0][0], goal.points[0][0][1], t],
@@ -116,40 +126,45 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
         vertices.append(n)
         roadmap[len(roadmap)] = []
 
+    print("length of vertices is: ", len(vertices))
+    print("num_points are: ", num_points)
+    increemental_reward = []
+    connectivity_reward = []
     while len(vertices) < num_points:
-        arm = ucb.select_arm()
+        arm, ucb_values = ucb.select_arm()
+        if ucb_values is not None:
+            ucb1.append(ucb_values[0])
+            ucb2.append((ucb_values[1]))
+
         if arm == 0:
             x, y, t = sample_uniform(0, 0, 0,
-                                    dmp_x_max + 5, dmp_y_max + 5, dmp_t_max + 0.1)
+                                    dmp_x_max, dmp_y_max, dmp_t_max)
 
         else:
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
         # get the dmp-time proximity reward.
-        reward = get_state_reward(x, y, t, dmp_time, obstacles)
 
+        reward = reward_weights['increemental'] * \
+            get_state_reward(x, y, t, guiding_paths=guiding_paths, weights=guiding_path_weights,
+                             obstacles=obstacles)
+
+        increemental_reward.append(reward)
         # ensures whether the sampled state is feasible.
-        if reward > 0:
+        if reward > 0 or reward_weights['connectivity'] > 0.0:
 
             # add the 2D node to the union find object
-
             edges = []
             node = Node([([x, y, t], [len(roadmap), 1/reward, None, arm])])
-            # node = Node(x, y, t, 1/reward)
-            # ax.scatter(x, y, t)
             # might be useful to vary the distance as a function of num_points for asym. optimality
 
             n_connected_components = uf.count()
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
-            # print("id of point being added to the union find is: ", sampled_pt_id)
             uf.add(sampled_pt_id)
-            neighbors = tree.neighbors((x, y, t), 5)
-            # print("length of neigbors is: ", len(neighbors))
+            neighbors = tree.neighbors((x, y, t), 0.2)
 
             for n in neighbors:
-                # neighbor_id = None
-
                 if n[1][0] == 0 or n[1][0] == 1:
 
                     # if the points are the original start or goal the id in UF and roadmap is the same
@@ -157,12 +172,11 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
 
                 elif 1 < n[1][0] <= num_goal_pts:
                     neighbor_id = goal.points[0][1][0]
-                else:
 
+                else:
                     # otherwise account for the additional goals that were inserted into the roadmap
                     neighbor_id = n[1][0] - num_goal_pts + 1
 
-                # print("n.points is: ", n.points)
                 x_out = n[0][0]
                 y_out = n[0][1]
                 t_out = n[0][2]
@@ -201,27 +215,37 @@ def plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min, num_points=3000):
             n_connected_components_new = uf.count()
 
             if n_connected_components_new < n_connected_components:
-                # print("node reduced the number of connected components..")
-                reward *= 1.5
+                con_reward = reward_weights['connectivity'] * 1.0
+                reward += con_reward
+                connectivity_reward.append(con_reward)
 
             elif n_connected_components > n_connected_components:
-                # print("node improved coverage of space..")
-                reward *= 1.2
+                con_reward = reward_weights['connectivity'] * 1.5
+                reward *= con_reward
+                connectivity_reward.append(con_reward)
 
-            # else:
-            #     print("node fell in a connected component..")
+            else:
+                con_reward = 0.0
+                connectivity_reward.append(con_reward)
 
         ucb.update(arm, reward)
-        ucb1.append(ucb.values[0])
-        ucb2.append(ucb.values[1])
+        mean1.append(ucb.values[0])
+        mean2.append(ucb.values[1])
 
     print("length of roadmap is: ", len(roadmap))
 
-    plt_ucb.plot(ucb1, 'bo')
-    plt_ucb.plot(ucb2, 'r+')
-    print("plt_ucb done..")
-    # plt.show()
-    return vertices, roadmap
+    plt_mean_reward.plot(mean1, 'bo')
+    plt_mean_reward.plot(mean2, 'r+')
+    plt_increemental_reward.plot(increemental_reward)
+    plt_connectivity_reward.plot(connectivity_reward)
+
+
+    print("plt mean reward done..")
+
+    plt_ucb.plot(ucb1)
+    plt_ucb.plot(ucb2)
+
+    return vertices, roadmap, ucb
 
 
 def dijkstra_planning(start, goal, road_map, vertices):
@@ -238,9 +262,6 @@ def dijkstra_planning(start, goal, road_map, vertices):
             print("Cannot find path")
             break
 
-        # have to change the way cost is accessed
-        # c_id = min(openset, key=lambda o: openset[o].cost)
-        # print("length of openset is: ", len(openset))
         min = None
         c_id = None
         for k, v in openset.items():
@@ -248,38 +269,24 @@ def dijkstra_planning(start, goal, road_map, vertices):
             if min is None:
                 min = cost
                 c_id = v.points[0][1][0]
-                # print("cid is: ", c_id)
 
             else:
                 if cost < min:
                     min = cost
                     c_id = v.points[0][1][0]
-                    # print("cid is: ", c_id)
 
-        # c_id = openset[openset.index(min([x.points[1][1] for key, x in openset.items()]))][1][0]
-        # print("doing operations for c_id: ", c_id)
-        # c_id = min(openset, key=lambda o: openset[o][1][1])
-        # if c_id in range(0, 21):
-        #     print('yes..')
         current = openset[c_id]
 
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
-            # print("current.points[0][1] is: ", current.points[0][1])
             if current.points[0][1][3] == -1:
-                # print("distribution value is -1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g')
-                # plt2d.pause(0.001)
 
             elif current.points[0][1][3] == 0:
-                # print("distribution value is 0")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
-                # plt.pause(0.001)
 
             elif current.points[0][1][3] == 1:
-                # print("distribution value is 1")
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r')
-                # plt.pause(0.001)
 
             # ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
 
@@ -289,10 +296,7 @@ def dijkstra_planning(start, goal, road_map, vertices):
             goal.points[0][1][2] = current.points[0][1][2]
             goal.points[0][1][1] = current.points[0][1][1]
             goal.points[0][0][2] = current.points[0][0][2]
-            # goal.pind = current.pind
-            # goal.cost = current.cost
-            # print("cost is: ", current.cost)
-            # goal.t = current.t
+
             break
 
         # Remove the item from the open set
@@ -306,22 +310,9 @@ def dijkstra_planning(start, goal, road_map, vertices):
             # print("ni_id is: ", n_id)
             if n_id in range(1, 21):
                 print("goal pt reached..")
-            # if n_id == 1:
-            #     print("goal at time o reached")
-            #     print("cost of the current node is: ", current.cost)
-            # if n_id in range(2, 19):
-            #     print("goal reached at non-zero time..")
-            #     print("cost of the current node is: ", current.cost)
 
             node = vertices[n_id]
-            # node = vertices[n_id]
-            # print("cost of node before connection: ", node.cost)
-            # node.cost += current.cost
-            # print(vertices[c_id].points[0][1][1])
-            # temp = node.points[1][1]
             node.points[0][1][1] += vertices[c_id].points[0][1][1]
-            # print("cost of node after connection: ", node.cost)
-            # node.pind = c_id
             node.points[0][1][2] = c_id
 
             if n_id in closedset:
@@ -331,10 +322,6 @@ def dijkstra_planning(start, goal, road_map, vertices):
                 if openset[n_id].points[0][1][1] > node.points[0][1][1]:
                     openset[n_id].points[0][1][1] = node.points[0][1][1]
                     openset[n_id].points[0][1][2] = c_id
-                # if openset[n_id].cost > node.cost:
-                #     openset[n_id].cost = node.cost
-                #     openset[n_id].pind = c_id
-
             else:
                 openset[n_id] = node
 
@@ -353,15 +340,29 @@ def dijkstra_planning(start, goal, road_map, vertices):
     return rx, ry, rt
 
 
-def PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=None, dmp_vel=None):
+def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
+                 reward_weights={'connectivity' : 1.0, 'increemental' : 0.000001}):
+
+    """
+
+    :param sx: x coordinate of start
+    :param sy: y coordinate of start
+    :param gx: x coordinate of goal
+    :param gy: y coordinate of goal
+    :param obstacles: obstacles arry
+    :param guiding_paths: array of guiding paths, primary dmp path should be at index 0
+    :param guiding_path_weights: weight for different cost from different guiding paths
+    :param dmp_vel: velocity at different points for the primary dmp path
+    :param reward_weights: relative importance of the different component costs
+    :return: space-time path for reaching the goal
+    """
 
     # declare node as ((x, y, t), (id, cost, pind))
     start = Node([([sx, sy, 0], [0, 0, -1, -1])])
-    # start = Node(sx, sy, 0, 0, -1)
 
-    print("time at goal is: ", dmp_time[-1][2])
-    goal = Node([([gx, gy, dmp_time[-1][2]], [1, 0, -1, -1])])
-    # goal = Node(gx, gy, dmp_time[-1][2], 0, -1)
+    print("time at goal is: ", guiding_paths[0][-1][2])
+
+    goal = Node([([gx, gy, guiding_paths[0][-1][2]], [1, 0, -1, -1])])
 
     print("start and goal nodes declared..")
     vel = []
@@ -376,25 +377,26 @@ def PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=None, dmp_vel=None):
     print("vmax is: ", v_max)
     print("vmin is: ", v_min)
 
-    # sample_x, sample_y, sample_t, vertices, roadmap = plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min)
+    ucb = UCB()
+    ucb.initialize(2)
 
-    vertices, roadmap = plan_ucb(start, goal, dmp_time, obstacles, v_max, v_min)
+    vertices, roadmap, ucb_updated = plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min,
+                                              guiding_path_weights=guiding_path_weights,
+                                              ucb=ucb, reward_weights=reward_weights)
     rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices)
 
-    return rx, ry, rt
+    return rx, ry, rt, ucb_updated
 
 
 def main(path_x=None, path_y=None):
     print(__file__ + " start!!")
 
     # start and goal position
-    sx = 10.0  # [m]
-    sy = 10.0  # [m]
+    sx = 10.0 * 0.01
+    sy = 10.0 * 0.01
 
-    # sx = 100.0
-    # sy = 100.0
-    gx = 75.0  # [m]
-    gy = 70.0  # [m]
+    gx = 75.0 * 0.01
+    gy = 70.0 * 0.01
 
     plot_paths = []
     legend_key = []
@@ -420,13 +422,14 @@ def main(path_x=None, path_y=None):
     plt2d.annotate("new_fin", (gx, gy))
 
     # coords = [(150.0, 120.0), (150.0, 140.0), (160.0, 140.0), (160.0, 120.0)]
-    coords = [(50.0, 30.0), (50.0, 40.0), (60.0, 40.0), (60.0, 30.0)]
+    coords = [(50.0 * 0.01, 30.0 * 0.01), (50.0 * 0.01, 40.0 * 0.01), (60.0 * 0.01, 40.0 * 0.01),
+              (60.0 * 0.01, 30.0 * 0.01)]
     poly1 = Polygon(coords)
 
     coords2 = [(25.0, 15.0), (25.0, 25.0), (35.0, 25.0), (35.0, 15.0)]
     poly2 = Polygon(coords2)
 
-    obstacles = [poly1, poly2]
+    obstacles = [poly1]
     print("[INFO]: obstacles created")
 
     for obstacle in obstacles:
@@ -453,7 +456,6 @@ def main(path_x=None, path_y=None):
     y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
     print("[INFO]: trajectory rolled out successfully..")
     print("shape of y_track_nc is: ", y_track_nc.shape)
-    # print("y_track_nc is: ", y_track_nc)
 
     y_track_nc_time = []
     print("total time is: ", len(y_track_nc) * dmp.dt)
@@ -488,10 +490,7 @@ def main(path_x=None, path_y=None):
     dmp_time_para = np.array(dmp_time_para)
     dmp_dy_time_para = np.array(dmp_dy_time_para)
 
-    # print("dmp time para is: ", dmp_time_para)
-    # print("dmp velocity time para is: ", dmp_dy_time_para)
-
-    rx, ry, rt = PRM_planning(sx, sy, gx, gy, obstacles, dmp_time=dmp_time_para, dmp_vel=dmp_dy_time_para)
+    rx, ry, rt, ucb = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para], dmp_vel=dmp_dy_time_para)
 
     rx = np.array(rx)
     ry = np.array(ry)
@@ -506,10 +505,6 @@ def main(path_x=None, path_y=None):
     plt2d.plot(rx, ry)
     plt.show()
 
-    # if show_animation:
-    #     plt.plot(rx, ry, "-r")
-    #     plt.show()
-
 
 if __name__ == '__main__':
     x, y = get_trajectory("../csv/data.csv")
@@ -517,7 +512,7 @@ if __name__ == '__main__':
 
     print("[INFO]: Read x and y from the csv file")
     # plt.scatter(x, y)
-    x = [10 * i for i in x]
-    y = [10 * j for j in y]
+    x = [0.1 * i for i in x]
+    y = [0.1 * j for j in y]
 
     main(path_x=x, path_y=y)
