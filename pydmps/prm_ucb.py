@@ -18,9 +18,10 @@ MAX_EDGE_LEN = 30.0     # [m] Maximum edge length
 
 show_animation = True
 
-fig1 = plt.figure(1)
-plt2d = fig1.add_subplot(111)
-fig1.suptitle('Path Plot', fontsize=24)
+# fig1 = plt.figure(1)
+# plt2d = fig1.add_subplot(111)
+fig, plt2d = plt.subplots()
+# fig1.suptitle('Path Plot', fontsize=24)
 
 fig2 = plt.figure(2)
 plt_mean_reward = fig2.add_subplot(111)
@@ -41,6 +42,8 @@ fig5.suptitle('UCB Values', fontsize=24)
 fig6 = plt.figure(6)
 plt_connected = fig6.add_subplot(111)
 fig6.suptitle('Number of connected components', fontsize=24)
+
+dist_plotting = None
 
 
 def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None):
@@ -89,10 +92,11 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
     return 1/cost_total
 
 
-def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=10000,
+def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=2000,
              reward_weights={'connectivity': 1.0, 'increemental': 1.0}, guiding_path_weights=[1.0],
              ucb=None):
 
+    global dist_plotting
     print("plan_ucb called..")
     print("total number of nodes in the roadmap should be: ", num_points)
 
@@ -114,6 +118,8 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=100
                                   + (dmp_time[i][2] - dmp_time[i+1][2]) ** 2)
 
     avg_distance /= len(dmp_time)
+
+    dist_plotting = 5 * avg_distance
     print("average 3D distance in the DMP is: ", avg_distance)
 
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
@@ -183,7 +189,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=100
             n_connected_components = uf.count()
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
 
-            neighbors = tree.neighbors((x, y, t), avg_distance)
+            neighbors = tree.neighbors((x, y, t), 5 * avg_distance)
 
             # print("number of neigbours are: ", len(neighbors))
             # print("----------")
@@ -248,64 +254,6 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=100
                             # print("union called")
                             uf.union(sampled_pt_id, neighbor_id)
 
-                # actual_num_scc = len(uf.get_scc().keys())
-                #
-                # if uf.count() != actual_num_scc:
-                #     print("neighbor id is: ", neighbor_id)
-                #     print("sampled_pt id is: ", sampled_pt_id)
-                #
-                #     print("DIFFERENCE FOUND...........")
-                #     print("actual number of scc; ", actual_num_scc)
-                #     print("N is:  ", uf.count())
-                #     print("id array is: ", uf._id)
-                #     print("rank is: ", uf._rank)
-                #
-                #     print("prev count is: ", prev_count)
-                #     print("prev_id is: ", prev_id)
-                #     return
-
-                # if uf.count() != len(set(uf._id)):
-                #     print("difference found!!")
-                #
-                #     print("sampled_pt id is: ", sampled_pt_id)
-                #     print("neighbor id is: ", neighbor_id)
-                #
-                #     print("sampled_pt uf id is: ", uf.find(sampled_pt_id))
-                #     print("neighbor pt uf id is: ", uf.find(neighbor_id))
-                #
-                #     temp = prev_id
-                #     p = neighbor_id
-                #     while p != temp[p]:
-                #         p = temp[p] = temp[temp[p]]
-                #
-                #     print("neighbor id in previous was: ", p)
-                #
-                #     temp = prev_id
-                #     p = sampled_pt_id
-                #
-                #     while p != temp[p]:
-                #         p = temp[p] = temp[temp[p]]
-                #
-                #     print("sampled_pt id in previous was: ", p)
-                #
-                #     print("previous count was: ", prev_count)
-                #     print("self.count is: ", uf.count())
-                #
-                #     print("number of unique ids prev: ", len(set(prev_id)))
-                #     print("number of unique ids in the uf is: ", len(set(uf._id)))
-                #
-                #     print("prev id are: ", prev_id)
-                #     print("id are: ", uf._id)
-                #
-                #     print("id in the roadmap is: ", n[1][0])
-                #     print("edges from the node are: ", roadmap[n[1][0]])
-                #     print("length of vertices is: ", len(vertices))
-                #     print("length of ids is: ", len(uf._id))
-                #
-                #     return
-                #
-                # prev_count = uf.count()
-                # prev_id = uf._id
 
             tree.add(node.points[0][0], node.points[0][1])
             roadmap[len(vertices)] = edges
@@ -359,6 +307,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=100
 
 def dijkstra_planning(start, goal, road_map, vertices):
 
+    global dist_plotting
     print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
     openset[0] = start
@@ -389,7 +338,7 @@ def dijkstra_planning(start, goal, road_map, vertices):
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
             if current.points[0][1][3] == -1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g')
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='y')
 
             elif current.points[0][1][3] == 0:
                 plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
@@ -417,8 +366,6 @@ def dijkstra_planning(start, goal, road_map, vertices):
         for i in range(len(road_map[c_id])):
             n_id = road_map[c_id][i]
             # print("ni_id is: ", n_id)
-            if n_id in range(1, 21):
-                print("goal pt reached..")
 
             node = vertices[n_id]
             node.points[0][1][1] += vertices[c_id].points[0][1][1]
@@ -444,6 +391,10 @@ def dijkstra_planning(start, goal, road_map, vertices):
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
+        circle = plt.Circle((n.points[0][0][0], n.points[0][0][1]), dist_plotting, linestyle='--',
+                            linewidth=0.5, color='b', fill=False)
+        # plt.Circle((n.points[0][0][0], n.points[0][0][1]), d)
+        plt2d.add_patch(circle)
         pind = n.points[0][1][2]
 
     return rx, ry, rt
