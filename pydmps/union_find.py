@@ -62,15 +62,13 @@ class UF:
         Find the set identifier for the item p.
 
         """
-
+        # print("calling find on: ", p)
         id = self._id
-        # print("calling find..")
-        # print("length of id is: ", len(id))
-        # print("p is: ", p)
+
         while p != id[p]:
             p = id[p] = id[id[p]]   # Path compression using halving.
-            # print("after assignment p is: ", p)
-            # print("length of id is: ", len(id))
+
+        # print("find returned: ", p)
         return p
 
     def count(self):
@@ -85,28 +83,54 @@ class UF:
 
     def union(self, p, q):
         """Combine sets containing p and q into a single set."""
-        # print("calling union on: ", (p, q))
+        # print("calling union")
+        print("sampled_pt id is: ", p)
+        print("neighbor pt id is: ", q)
         id = self._id
         rank = self._rank
 
         i = self.find(p)
         j = self.find(q)
+
+        print("sampled_pt parent is: ", i)
+        print("neigbor pt parent is: ", j)
         if i == j:
+            print("already in the same strongly connected component")
             return
 
         self._count -= 1
+        print("one connected component would be reduced..")
         if rank[i] < rank[j]:
+            print("neighbor id assigned to the sampled point")
             id[i] = j
         elif rank[i] > rank[j]:
+            print("sampled pt id assigned to the neighbor")
             id[j] = i
         else:
-            id[j] = i
-            rank[i] += 1
+            # print("neighbor id assigned to the sampled point")
+            id[i] = j
+            rank[j] += 1
 
     def add(self, p):
         self._id.append(p)
         self._count += 1
         self._rank.append(0)
+
+    def get_num_nodes(self):
+        return len(self._id)
+
+    def get_scc(self):
+        scc = {}
+
+        for x in self._id:
+            x_parent = self.find(x)
+            if x_parent in scc.keys():
+                scc[x_parent].append(x)
+
+            else:
+                scc[x_parent] = [x]
+
+        return scc
 
     def __str__(self):
         """String representation of the union find object."""
@@ -116,3 +140,46 @@ class UF:
         """Representation of the union find object."""
         return "UF(" + str(self) + ")"
 
+
+# uf = UF(10)
+#
+# print("after initialising count is: ", uf.count())
+# print("after initialising id is: ", uf._id)
+# print("after initialising rank is: ", uf._rank)
+#
+#
+# uf.union(0, 1)
+# uf.union(3, 1)
+# uf.union(4, 1)
+# uf.union(5, 1)
+#
+# print("after 4 union operations count is: ", uf.count())
+# print("after 4 union operations id is: ", uf._id)
+# print("after 4 union operations rank is: ", uf._rank)
+#
+# uf.union(6, 2)
+# uf.union(7, 2)
+# uf.union(8, 2)
+# uf.union(9, 2)
+#
+# print("after first set of unions scc is: ", uf.get_scc())
+#
+# uf.union(0, 7)
+# uf.union(4, 7)
+# uf.union(5, 8)
+# print("after final union operations count is: ", uf.count())
+# print("after final union operations id is: ", uf._id)
+# print("after final union operations rank is: ", uf._rank)
+#
+# print("--------")
+# print("scc after all operations is: ", uf.get_scc())
+
+
+#
+# uf.add(1000)
+# uf.union(3, 1000)
+# print("union 1000 and 3")
+# print("after adding 3")
+# print("rank is: ", uf._rank)
+# print("id is: ", uf._id)
+# print("count is: ", uf.count())
