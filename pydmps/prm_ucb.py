@@ -10,33 +10,43 @@ from dmp_discrete import DMPs_discrete
 from kdtree import Node, KDTree
 from union_find import UF
 from ucb import UCB
+import time
 
-N_SAMPLE = 500  # number of sample_points
-N_KNN = 80  # number of edge from one sampled point
-MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
+N_SAMPLE = 500          # number of sample_points
+N_KNN = 80              # number of edge from one sampled point
+MAX_EDGE_LEN = 30.0     # [m] Maximum edge length
 
 show_animation = True
 
 fig1 = plt.figure(1)
 plt2d = fig1.add_subplot(111)
+fig1.suptitle('Path Plot', fontsize=24)
 
 fig2 = plt.figure(2)
 plt_mean_reward = fig2.add_subplot(111)
+fig2.suptitle('Mean Reward', fontsize=24)
 
 fig3 = plt.figure(3)
 plt_increemental_reward = fig3.add_subplot(111)
+fig3.suptitle('Increemental Reward', fontsize=24)
 
 fig4 = plt.figure(4)
 plt_connectivity_reward = fig4.add_subplot(111)
+fig4.suptitle('Connectivity Reward', fontsize=24)
 
 fig5 = plt.figure(5)
 plt_ucb = fig5.add_subplot(111)
+fig5.suptitle('UCB Values', fontsize=24)
+
+fig6 = plt.figure(6)
+plt_connected = fig6.add_subplot(111)
+fig6.suptitle('Number of connected components', fontsize=24)
 
 
 def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None):
 
     if t < 0:
-        return 1/1000000
+        return 1/100000
 
     cost_total = 0.0
     for i in range(0, len(guiding_paths)):
@@ -61,7 +71,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
                 point = Point((pt[0], pt[1]))
 
                 if obstacle.contains(point):
-                    return 1/1000000
+                    return 1/100000
 
                 else:
 
@@ -76,15 +86,17 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
         # cost += obstacle_cost
         cost_total += weight * cost
 
-    return (1/cost_total)/1000
+    return 1/cost_total
 
 
-def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
+def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=10000,
              reward_weights={'connectivity': 1.0, 'increemental': 1.0}, guiding_path_weights=[1.0],
              ucb=None):
 
     print("plan_ucb called..")
     print("total number of nodes in the roadmap should be: ", num_points)
+
+    conn_comp_arr = []
 
     dmp_time = guiding_paths[0]
     time_reso = dmp_time[1][2] - dmp_time[0][2]
@@ -95,6 +107,14 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
     dmp_x_max = np.max(dmp_time[:, 0])
     dmp_y_max = np.max(dmp_time[:, 1])
     dmp_t_max = np.max(dmp_time[:, 2])
+
+    avg_distance = 0.0
+    for i in range(0, len(dmp_time) - 1):
+        avg_distance += math.sqrt((dmp_time[i][0] - dmp_time[i+1][0]) ** 2 + (dmp_time[i][1] - dmp_time[i+1][1]) ** 2
+                                  + (dmp_time[i][2] - dmp_time[i+1][2]) ** 2)
+
+    avg_distance /= len(dmp_time)
+    print("average 3D distance in the DMP is: ", avg_distance)
 
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
     print("max for uniform distribution is: ", (dmp_x_max, dmp_y_max, dmp_t_max))
@@ -151,6 +171,8 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
                              obstacles=obstacles)
 
         increemental_reward.append(reward)
+        # prev_count = None
+        # prev_id = None
         # ensures whether the sampled state is feasible.
         if reward > 0 or reward_weights['connectivity'] > 0.0:
 
@@ -158,20 +180,34 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
             edges = []
             node = Node([([x, y, t], [len(roadmap), 1/reward, None, arm])])
             # might be useful to vary the distance as a function of num_points for asym. optimality
-
             n_connected_components = uf.count()
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
+
+            neighbors = tree.neighbors((x, y, t), avg_distance)
+
+            # print("number of neigbours are: ", len(neighbors))
+            # print("----------")
+            # if len(neighbors) > 0:
+            #     print("number of neighbors are: ", len(neighbors))
+            #     print("before information..")
+            #     print("number of nodes are: ", uf.get_num_nodes())
+            #     print("self.count is: ", uf.count())
+            #     print("number of unique ids in the uf is: ", len(set(uf._id)))
+
+            # print("adding node to uf whose id length is.......................: ", len(uf._id))
+            # print("id for node being added.............................: ", sampled_pt_id)
             uf.add(sampled_pt_id)
-            neighbors = tree.neighbors((x, y, t), 0.2)
 
             for n in neighbors:
                 if n[1][0] == 0 or n[1][0] == 1:
 
                     # if the points are the original start or goal the id in UF and roadmap is the same
-                    neighbor_id = n[1][0]
+                    # neighbor_id = n[1][0]
+                    neighbor_id = 0
 
-                elif 1 < n[1][0] <= num_goal_pts:
-                    neighbor_id = goal.points[0][1][0]
+                elif 1 <= n[1][0] <= num_goal_pts:
+                    # neighbor_id = goal.points[0][1][0]
+                    neighbor_id = 1
 
                 else:
                     # otherwise account for the additional goals that were inserted into the roadmap
@@ -191,6 +227,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
                         for obstacle in obstacles:
                             if l.intersects(obstacle):
                                 intersect = True
+                                break
 
                         if not intersect:
                             edges.append(n[1][0])
@@ -204,16 +241,81 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
                         for obstacle in obstacles:
                             if l.intersects(obstacle):
                                 intersect = True
+                                break
 
                         if not intersect:
-                                roadmap[n[1][0]].append(len(roadmap))
-                                uf.union(sampled_pt_id, neighbor_id)
+                            roadmap[n[1][0]].append(len(roadmap))
+                            # print("union called")
+                            uf.union(sampled_pt_id, neighbor_id)
+
+                # actual_num_scc = len(uf.get_scc().keys())
+                #
+                # if uf.count() != actual_num_scc:
+                #     print("neighbor id is: ", neighbor_id)
+                #     print("sampled_pt id is: ", sampled_pt_id)
+                #
+                #     print("DIFFERENCE FOUND...........")
+                #     print("actual number of scc; ", actual_num_scc)
+                #     print("N is:  ", uf.count())
+                #     print("id array is: ", uf._id)
+                #     print("rank is: ", uf._rank)
+                #
+                #     print("prev count is: ", prev_count)
+                #     print("prev_id is: ", prev_id)
+                #     return
+
+                # if uf.count() != len(set(uf._id)):
+                #     print("difference found!!")
+                #
+                #     print("sampled_pt id is: ", sampled_pt_id)
+                #     print("neighbor id is: ", neighbor_id)
+                #
+                #     print("sampled_pt uf id is: ", uf.find(sampled_pt_id))
+                #     print("neighbor pt uf id is: ", uf.find(neighbor_id))
+                #
+                #     temp = prev_id
+                #     p = neighbor_id
+                #     while p != temp[p]:
+                #         p = temp[p] = temp[temp[p]]
+                #
+                #     print("neighbor id in previous was: ", p)
+                #
+                #     temp = prev_id
+                #     p = sampled_pt_id
+                #
+                #     while p != temp[p]:
+                #         p = temp[p] = temp[temp[p]]
+                #
+                #     print("sampled_pt id in previous was: ", p)
+                #
+                #     print("previous count was: ", prev_count)
+                #     print("self.count is: ", uf.count())
+                #
+                #     print("number of unique ids prev: ", len(set(prev_id)))
+                #     print("number of unique ids in the uf is: ", len(set(uf._id)))
+                #
+                #     print("prev id are: ", prev_id)
+                #     print("id are: ", uf._id)
+                #
+                #     print("id in the roadmap is: ", n[1][0])
+                #     print("edges from the node are: ", roadmap[n[1][0]])
+                #     print("length of vertices is: ", len(vertices))
+                #     print("length of ids is: ", len(uf._id))
+                #
+                #     return
+                #
+                # prev_count = uf.count()
+                # prev_id = uf._id
 
             tree.add(node.points[0][0], node.points[0][1])
             roadmap[len(vertices)] = edges
             vertices.append(node)
-            n_connected_components_new = uf.count()
+            # n_connected_components_new = uf.count()
+            n_connected_components_new = len(uf.get_scc().keys())
 
+            conn_comp_arr.append(n_connected_components_new)
+            # print("difference between new num connected vs old is: ", (n_connected_components_new -
+            #                                                            n_connected_components))
             if n_connected_components_new < n_connected_components:
                 con_reward = reward_weights['connectivity'] * 1.0
                 reward += con_reward
@@ -234,16 +336,23 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=300
 
     print("length of roadmap is: ", len(roadmap))
 
-    plt_mean_reward.plot(mean1, 'bo')
-    plt_mean_reward.plot(mean2, 'r+')
+    plt_mean_reward.plot(mean1, 'bo', label='uniform')
+    plt_mean_reward.plot(mean2, 'r+', label='dmp_normal')
+    plt_mean_reward.legend()
+
     plt_increemental_reward.plot(increemental_reward)
     plt_connectivity_reward.plot(connectivity_reward)
+    increemental_reward = np.array(increemental_reward)
 
-
+    print("max in the increemental reward array is: ", np.max(increemental_reward))
+    print("min in the increemental reward array is: ", np.min(increemental_reward))
     print("plt mean reward done..")
 
-    plt_ucb.plot(ucb1)
-    plt_ucb.plot(ucb2)
+    plt_ucb.plot(ucb1, label='uniform')
+    plt_ucb.plot(ucb2, label='dmp normal')
+    plt_ucb.legend()
+
+    plt_connected.plot(conn_comp_arr)
 
     return vertices, roadmap, ucb
 
@@ -341,7 +450,7 @@ def dijkstra_planning(start, goal, road_map, vertices):
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
-                 reward_weights={'connectivity' : 1.0, 'increemental' : 0.000001}):
+                 reward_weights={'connectivity': 1.0, 'increemental': 0.000001}):
 
     """
 
@@ -404,9 +513,8 @@ def main(path_x=None, path_y=None):
     z = np.zeros((1, len(path_x)))
 
     # orig_path = ax.plot_wireframe(np.array(path_x), np.array(path_y), z, '--', linewidth=2)
-    plt2d.plot(path_x, path_y, '--', linewidth=2)
+    plt2d.plot(path_x, path_y, '--', linewidth=2, label='demonstration')
     # plot_paths.append(orig_path)
-    legend_key.append('original')
     # ax.scatter(path_x[0], path_y[0], z[0][0])
     plt2d.scatter(path_x[0], path_y[0])
     plt2d.annotate("st. original", (path_x[0], path_y[0]))
@@ -471,12 +579,13 @@ def main(path_x=None, path_y=None):
     # ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
     # # ax.plot_wireframe(y_track_nc_x, y_track_nc_y, y_track_nc_time)
     # plot = ax.plot_wireframe(y_track_nc_x, y_track_nc_y, np.zeros((1, len(y_track_nc))))
-    plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y)
+    plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y, label='dmp')
     plt2d.scatter(y_track_nc_x, y_track_nc_y)
     # plot_paths.append(plot)
-    legend_key.append('dmp')
+    # legend_key.append('dmp')
     # plt.show()
     # dmp_res = dmp.dt
+
     dmp_time_para = []
     dmp_dy_time_para = []
     for i in range(0, len(y_track_nc)):
@@ -500,9 +609,10 @@ def main(path_x=None, path_y=None):
     print("rt is: ", rt)
     # plot = ax.plot_wireframe(rx, ry, rt)
     # plot_paths.append(plot)
-    legend_key.append('dijkstra')
+    # legend_key.append('dijkstra')
     # plt.legend(plot_paths, legend_key, loc='lower right')
-    plt2d.plot(rx, ry)
+    plt2d.plot(rx, ry, label='final path')
+    plt2d.legend()
     plt.show()
 
 
