@@ -10,7 +10,8 @@ from dmp_discrete import DMPs_discrete
 from kdtree import Node, KDTree
 from union_find import UF
 from ucb import UCB
-import time
+from mpl_toolkits.mplot3d import axes3d
+
 
 N_SAMPLE = 500          # number of sample_points
 N_KNN = 80              # number of edge from one sampled point
@@ -18,22 +19,18 @@ MAX_EDGE_LEN = 30.0     # [m] Maximum edge length
 
 show_animation = True
 
-# fig1 = plt.figure(1)
-# plt2d = fig1.add_subplot(111)
 fig, plt2d = plt.subplots()
-# fig1.suptitle('Path Plot', fontsize=24)
 
 fig2 = plt.figure(2)
 plt_mean_reward = fig2.add_subplot(111)
 fig2.suptitle('Mean Reward', fontsize=24)
 
 fig3 = plt.figure(3)
-plt_increemental_reward = fig3.add_subplot(111)
-fig3.suptitle('Increemental Reward', fontsize=24)
+plt_reward = fig3.add_subplot(111)
+fig3.suptitle('Reward', fontsize=24)
 
-fig4 = plt.figure(4)
-plt_connectivity_reward = fig4.add_subplot(111)
-fig4.suptitle('Connectivity Reward', fontsize=24)
+fig4 = plt.figure()
+ax = fig4.add_subplot(111, projection='3d')
 
 fig5 = plt.figure(5)
 plt_ucb = fig5.add_subplot(111)
@@ -41,7 +38,7 @@ fig5.suptitle('UCB Values', fontsize=24)
 
 fig6 = plt.figure(6)
 plt_connected = fig6.add_subplot(111)
-fig6.suptitle('Number of connected components', fontsize=24)
+fig6.suptitle('Number of disconnected components', fontsize=24)
 
 dist_plotting = None
 
@@ -93,10 +90,11 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
 
 
 def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=2000,
-             reward_weights={'connectivity': 1.0, 'increemental': 1.0}, guiding_path_weights=[1.0],
+             reward_weights={'connectivity': 0.01, 'increemental': 1.0}, guiding_path_weights=[1.0],
              ucb=None):
 
     global dist_plotting
+
     print("plan_ucb called..")
     print("total number of nodes in the roadmap should be: ", num_points)
 
@@ -120,6 +118,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
     avg_distance /= len(dmp_time)
 
     dist_plotting = 5 * avg_distance
+    edge_resolution = avg_distance
     print("average 3D distance in the DMP is: ", avg_distance)
 
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
@@ -163,10 +162,12 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
             ucb2.append((ucb_values[1]))
 
         if arm == 0:
-            x, y, t = sample_uniform(0, 0, 0,
-                                    dmp_x_max, dmp_y_max, dmp_t_max)
+            x, y, t = sample_uniform(dmp_x_min - 0.1, dmp_y_min - 0.1, 0,
+                                    dmp_x_max + 0.1, dmp_y_max + 0.1, dmp_t_max + 0.1)
 
         else:
+
+            # print("SAMPLED FROM DMP_NORMAL")
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
@@ -182,6 +183,12 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
         # ensures whether the sampled state is feasible.
         if reward > 0 or reward_weights['connectivity'] > 0.0:
 
+            if arm == 0:
+                plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
+
+            elif arm == 1:
+                plt2d.plot(x, y, marker="+", color='r', markersize=2.0)
+
             # add the 2D node to the union find object
             edges = []
             node = Node([([x, y, t], [len(roadmap), 1/reward, None, arm])])
@@ -191,17 +198,6 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
 
             neighbors = tree.neighbors((x, y, t), 5 * avg_distance)
 
-            # print("number of neigbours are: ", len(neighbors))
-            # print("----------")
-            # if len(neighbors) > 0:
-            #     print("number of neighbors are: ", len(neighbors))
-            #     print("before information..")
-            #     print("number of nodes are: ", uf.get_num_nodes())
-            #     print("self.count is: ", uf.count())
-            #     print("number of unique ids in the uf is: ", len(set(uf._id)))
-
-            # print("adding node to uf whose id length is.......................: ", len(uf._id))
-            # print("id for node being added.............................: ", sampled_pt_id)
             uf.add(sampled_pt_id)
 
             for n in neighbors:
@@ -254,7 +250,6 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
                             # print("union called")
                             uf.union(sampled_pt_id, neighbor_id)
 
-
             tree.add(node.points[0][0], node.points[0][1])
             roadmap[len(vertices)] = edges
             vertices.append(node)
@@ -288,8 +283,11 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
     plt_mean_reward.plot(mean2, 'r+', label='dmp_normal')
     plt_mean_reward.legend()
 
-    plt_increemental_reward.plot(increemental_reward)
-    plt_connectivity_reward.plot(connectivity_reward)
+    plt_reward.plot(increemental_reward, label='increemental')
+    plt_reward.plot(connectivity_reward, label='connectivity')
+    plt_reward.legend()
+
+    # plt_connectivity_reward.plot(connectivity_reward)
     increemental_reward = np.array(increemental_reward)
 
     print("max in the increemental reward array is: ", np.max(increemental_reward))
@@ -302,12 +300,15 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
 
     plt_connected.plot(conn_comp_arr)
 
-    return vertices, roadmap, ucb
+    return vertices, roadmap, ucb, edge_resolution
 
 
-def dijkstra_planning(start, goal, road_map, vertices):
+def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guiding_path_weights=None,
+                      edge_resolution=None, use_discretised_cost=True):
 
     global dist_plotting
+    # plotted_once = False
+
     print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
     openset[0] = start
@@ -338,13 +339,13 @@ def dijkstra_planning(start, goal, road_map, vertices):
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
             if current.points[0][1][3] == -1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='y')
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=8)
 
             elif current.points[0][1][3] == 0:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b')
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=8)
 
             elif current.points[0][1][3] == 1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r')
+                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=8)
 
             # ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
 
@@ -368,7 +369,17 @@ def dijkstra_planning(start, goal, road_map, vertices):
             # print("ni_id is: ", n_id)
 
             node = vertices[n_id]
-            node.points[0][1][1] += vertices[c_id].points[0][1][1]
+
+            if use_discretised_cost:
+                edge_cost = calculate_discretised_edge_cost(node.points[0], vertices[c_id].points[0],
+                                                            guiding_paths, guiding_path_weights,
+                                                            edge_resolution)
+
+                node.points[0][1][1] += edge_cost
+
+            else:
+                node.points[0][1][1] += vertices[c_id].points[0][1][1]
+
             node.points[0][1][2] = c_id
 
             if n_id in closedset:
@@ -391,17 +402,20 @@ def dijkstra_planning(start, goal, road_map, vertices):
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
-        circle = plt.Circle((n.points[0][0][0], n.points[0][0][1]), dist_plotting, linestyle='--',
-                            linewidth=0.5, color='b', fill=False)
-        # plt.Circle((n.points[0][0][0], n.points[0][0][1]), d)
-        plt2d.add_patch(circle)
+        # if plotted_once is not True:
+        #     circle = plt.Circle((n.points[0][0][0], n.points[0][0][1]), dist_plotting, linestyle='--',
+        #                         linewidth=0.5, color='b', fill=False)
+        #     # plt.Circle((n.points[0][0][0], n.points[0][0][1]), d)
+        #     plt2d.add_patch(circle)
+        #     plotted_once = True
+
         pind = n.points[0][1][2]
 
     return rx, ry, rt
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
-                 reward_weights={'connectivity': 1.0, 'increemental': 0.000001}):
+                 reward_weights={'connectivity': 1.0, 'increemental': 0.1}):
 
     """
 
@@ -440,12 +454,48 @@ def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, gu
     ucb = UCB()
     ucb.initialize(2)
 
-    vertices, roadmap, ucb_updated = plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min,
-                                              guiding_path_weights=guiding_path_weights,
-                                              ucb=ucb, reward_weights=reward_weights)
-    rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices)
+    vertices, roadmap, ucb_updated, edge_reso = plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min,
+                                                         guiding_path_weights=guiding_path_weights,
+                                                         ucb=ucb, reward_weights=reward_weights)
+
+    rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                                   guiding_paths=guiding_paths, edge_resolution=edge_reso)
 
     return rx, ry, rt, ucb_updated
+
+
+def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_path_weights, edge_resolution):
+
+    edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
+                            (origin[0][2] - destination[0][2]) ** 2)
+
+    if edge_length <= edge_resolution:
+        return destination[1][1]
+
+    else:
+
+        guiding_path_index = np.argmax(np.array(guiding_path_weights))
+        guiding_path = guiding_paths[guiding_path_index]
+
+        mid_pt = [(origin[0][0] + destination[0][0]) / 2, (origin[0][1] + destination[0][1]) / 2,
+                  (origin[0][2] + destination[0][2]) / 2]
+
+        # print("mid_pt is: ", mid_pt)
+        dist_array = []
+
+        for pt in guiding_path:
+            # print("pt from dmp is: ", pt)
+            dist = math.sqrt((mid_pt[0] - pt[0]) ** 2 + (mid_pt[1] - pt[1]) ** 2 + (mid_pt[2] - pt[2]) ** 2)
+            dist_array.append(dist)
+
+        closest_pt_index = np.argmin(np.array(dist_array))
+
+        cost = math.sqrt((mid_pt[0] - guiding_path[closest_pt_index][0]) ** 2 +
+                         (mid_pt[1] - guiding_path[closest_pt_index][1]) ** 2)
+
+        cost += destination[1][1]
+
+        return cost
 
 
 def main(path_x=None, path_y=None):
@@ -463,17 +513,17 @@ def main(path_x=None, path_y=None):
 
     z = np.zeros((1, len(path_x)))
 
-    # orig_path = ax.plot_wireframe(np.array(path_x), np.array(path_y), z, '--', linewidth=2)
+    orig_path = ax.plot_wireframe(np.array(path_x), np.array(path_y), z, '--', linewidth=2)
+    ax.scatter(path_x[0], path_y[0], z[0][0])
+    ax.scatter(path_x[-1], path_y[-1], z[0][-1])
     plt2d.plot(path_x, path_y, '--', linewidth=2, label='demonstration')
-    # plot_paths.append(orig_path)
-    # ax.scatter(path_x[0], path_y[0], z[0][0])
+
     plt2d.scatter(path_x[0], path_y[0])
     plt2d.annotate("st. original", (path_x[0], path_y[0]))
-    # ax.scatter(path_x[-1], path_y[-1], z[0][-1])
     plt2d.scatter(path_x[-1], path_y[-1])
     plt2d.annotate("f original.", (path_x[-1], path_y[-1]))
 
-    # ax.scatter(sx, sy, 0.0)
+    ax.scatter(sx, sy, 0.0)
     plt2d.scatter(sx, sy)
     plt2d.annotate("new_st", (sx, sy))
 
@@ -489,6 +539,7 @@ def main(path_x=None, path_y=None):
     poly2 = Polygon(coords2)
 
     obstacles = [poly1]
+    # obstacles = []
     print("[INFO]: obstacles created")
 
     for obstacle in obstacles:
@@ -527,15 +578,9 @@ def main(path_x=None, path_y=None):
     y_track_nc_x = np.array(y_track_nc[:, 0])
     y_track_nc_y = np.array(y_track_nc[:, 1])
 
-    # ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
-    # # ax.plot_wireframe(y_track_nc_x, y_track_nc_y, y_track_nc_time)
-    # plot = ax.plot_wireframe(y_track_nc_x, y_track_nc_y, np.zeros((1, len(y_track_nc))))
+    ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
     plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y, label='dmp')
     plt2d.scatter(y_track_nc_x, y_track_nc_y)
-    # plot_paths.append(plot)
-    # legend_key.append('dmp')
-    # plt.show()
-    # dmp_res = dmp.dt
 
     dmp_time_para = []
     dmp_dy_time_para = []
@@ -558,10 +603,10 @@ def main(path_x=None, path_y=None):
     print("shape of rx is: ", rx.shape)
 
     print("rt is: ", rt)
-    # plot = ax.plot_wireframe(rx, ry, rt)
-    # plot_paths.append(plot)
-    # legend_key.append('dijkstra')
-    # plt.legend(plot_paths, legend_key, loc='lower right')
+    plot = ax.plot_wireframe(rx, ry, rt)
+    plot_paths.append(plot)
+    legend_key.append('dijkstra')
+    plt.legend(plot_paths, legend_key, loc='lower right')
     plt2d.plot(rx, ry, label='final path')
     plt2d.legend()
     plt.show()
