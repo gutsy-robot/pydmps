@@ -3,6 +3,8 @@ Probablistic Road Map (PRM) Planner
 author: Atsushi Sakai (@Atsushi_twi)
 """
 
+# correct implementation in dijkstra's search method
+
 import random
 import math
 import numpy as np
@@ -18,7 +20,7 @@ from scipy.stats import rv_continuous
 
 # parameter
 N_SAMPLE = 500  # number of sample_points
-N_KNN = 10  # number of edge from one sampled point
+N_KNN = 80  # number of edge from one sampled point
 MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 
 show_animation = True
@@ -32,7 +34,7 @@ plt2d = fig2.add_subplot(111)
 
 class dmp_gen(rv_continuous):
 
-    def __init__(self, dmp):
+    def __init__(self, dmp=None):
         self.dmp = dmp
 
     def _pdf(self, x, y):
@@ -54,7 +56,7 @@ class Node:
     Node class for dijkstra search
     """
 
-    def __init__(self, x, y, t, cost, pind):
+    def __init__(self, x, y, t, cost, pind=None):
         self.x = x
         self.y = y
         self.t = t
@@ -107,9 +109,10 @@ def PRM_planning(sx, sy, gx, gy, obstacles, dmp=None, dmp_vel=None):
 
     # obkdtree = KDTree(np.vstack((ox, oy)).T)
 
-    sample_x, sample_y = sample_points(sx, sy, gx, gy, obstacles, dmp)
+    sample_x, sample_y = sample_normal(sx, sy, gx, gy, obstacles, dmp)
     if show_animation:
         plt.plot(sample_x, sample_y, ".b")
+        plt.pause(0.01)
 
     road_map = generate_roadmap(sample_x, sample_y, obstacles)
 
@@ -124,18 +127,33 @@ def generate_roadmap(sample_x, sample_y, obstacles):
     road_map = []
     nsample = len(sample_x)
     print("no of sample_x pts are: ", len(sample_x))
+    print("shape of sample_x is: ", np.array(sample_x).shape)
+    print("shape of sample_y is: ", np.array(sample_y).shape)
+    print("shape of kdtree parameter: ", np.vstack((sample_x, sample_y)).T.shape)
     skdtree = KDTree(np.vstack((sample_x, sample_y)).T)
 
     for (i, ix, iy) in zip(range(nsample), sample_x, sample_y):
 
-        index, dists = skdtree.search(
-            np.array([ix, iy]).reshape(2, 1), k=nsample)
+        # index, dists = skdtree.search(
+        #     np.array([ix, iy]).reshape(2, 1), k=nsample)              # old code for using
+
+        index = skdtree.search_in_distance(np.array([ix, iy]), 10)
+
+        # if len(index) < 10:
+        # print("length of index is less than ten and is: ", len(index) )
+        dist = 10
+        dist_max = 40
+        while len(index) < 10 and dist <= dist_max:
+            # print("length of index is less than ten and is: ", len(index))
+            dist *= 2
+            index = skdtree.search_in_distance(np.array([ix, iy]), dist)
+            # print("length of index for a bigger ball is: ", len(index))
+
+        # print("index is: ", index)
+        # inds = index[0]
         # print("length of index is: ", len(index))
-        inds = index[0]
-        # print("inds is: ", inds)
-        # print("length of inds is: ", len(inds))
+        inds = index
         edge_id = []
-        #  print(index)
 
         for ii in range(1, len(inds)):
             nx = sample_x[inds[ii]]
@@ -145,6 +163,7 @@ def generate_roadmap(sample_x, sample_y, obstacles):
             for obstacle in obstacles:
                 if not l.intersects(obstacle):
                     edge_id.append(inds[ii])
+                    # plt.plot([ix, nx], [iy, ny], 'bo')
 
             if len(edge_id) >= N_KNN:
                 break
@@ -152,8 +171,8 @@ def generate_roadmap(sample_x, sample_y, obstacles):
         # print("edge id is: ", edge_id)
         road_map.append(edge_id)
 
-    #  plot_road_map(road_map, sample_x, sample_y)
-
+    # plot_road_map(road_map, sample_x, sample_y)
+    plt.pause(0.001)
     return road_map
 
 
@@ -166,6 +185,7 @@ def dijkstra_planning(sx, sy, gx, gy, road_map, sample_x, sample_y, obstacles, d
     oy: y position list of Obstacles [m]
     reso: grid resolution [m]
     rr: robot radius[m]
+
     """
 
     # vx_max = max(dmp_vel[:, 0])
@@ -210,6 +230,7 @@ def dijkstra_planning(sx, sy, gx, gy, road_map, sample_x, sample_y, obstacles, d
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
             plt.plot(current.x, current.y, "xg")
+            ax.scatter(current.x, current.y, current.t)
             plt.pause(0.001)
 
         if c_id == (len(road_map) - 1):
@@ -274,17 +295,13 @@ def plot_road_map(road_map, sample_x, sample_y):  # pragma: no cover
                      [sample_y[i], sample_y[ind]], "-k")
 
 
-def sample_points(sx, sy, gx, gy, obstacles, dmp=None):
-    maxx = 150
-    maxy = 150
-    minx = 0
-    miny = 0
+def sample_points(sx, sy, gx, gy, obstacles, minx=20, miny=40, maxx=60, maxy=130, num_points=500, dmp=None):
 
     sample_x, sample_y = [], []
 
-    while len(sample_x) <= N_SAMPLE:
-        tx = (random.random() - minx) * (maxx - minx)
-        ty = (random.random() - miny) * (maxy - miny)
+    while len(sample_x) <= num_points:
+        tx = np.random.uniform(low=minx, high=maxx, size=1)[0]
+        ty = np.random.uniform(low=miny, high=maxy, size=1)[0]
 
         point = Point((tx, ty))
         collision = False
@@ -307,6 +324,57 @@ def sample_points(sx, sy, gx, gy, obstacles, dmp=None):
         if not collision:
             sample_x.append(pt[0])
             sample_y.append(pt[1])
+
+    sample_x.append(sx)
+    sample_y.append(sy)
+    sample_x.append(gx)
+    sample_y.append(gy)
+
+    return sample_x, sample_y
+
+
+def sample_normal(sx, sy, gx, gy, obstacles, dmp=None):
+    sample_x, sample_y = [], []
+
+    for pt in dmp:
+        point = Point((pt[0], pt[1]))
+        collision = False
+        for obstacle in obstacles:
+            if obstacle.contains(point):
+                collision = True
+                break
+
+        if not collision:
+            sample_x.append(pt[0])
+            sample_y.append(pt[1])
+            mean = [pt[0], pt[1]]
+            cov = [[50, 0], [0, 50]]
+            x, y = np.random.multivariate_normal(mean, cov, 10).T
+            for i in range(0, len(x)):
+                point = Point((x[i], y[i]))
+                collision = False
+                for obstacle in obstacles:
+                    if obstacle.contains(point):
+                        collision = True
+                        break
+                if not collision:
+                    sample_x.append(x[i])
+                    sample_y.append(y[i])
+
+        else:
+            mean = [pt[0], pt[1]]
+            cov = [[200, 0], [0, 200]]
+            x, y = np.random.multivariate_normal(mean, cov, 100).T
+            for i in range(0, len(x)):
+                point = Point((x[i], y[i]))
+                collision = False
+                for obstacle in obstacles:
+                    if obstacle.contains(point):
+                        collision = True
+                        break
+                if not collision:
+                    sample_x.append(x[i])
+                    sample_y.append(y[i])
 
     sample_x.append(sx)
     sample_y.append(sy)
@@ -360,7 +428,7 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
 
     # print("obstacle cost is: ", obstacle_cost)
 
-    # cost += obstacle_cost
+    cost += obstacle_cost
 
     # print("total cost is: ", cost)
 
@@ -478,7 +546,7 @@ def main(path_x=None, path_y=None):
     plot = ax.plot_wireframe(rx, ry, rt)
     plot_paths.append(plot)
     legend_key.append('dijkstra')
-    plt.legend(plot_paths, legend_key, loc='lower right')
+    # plt.legend(plot_paths, legend_key, loc='lower right')
     plt2d.plot(rx, ry)
     plt.show()
 
