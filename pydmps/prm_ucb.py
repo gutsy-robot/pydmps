@@ -89,9 +89,9 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
     return 1/cost_total
 
 
-def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=2000,
-             reward_weights={'connectivity': 0.01, 'increemental': 1.0}, guiding_path_weights=[1.0],
-             ucb=None):
+def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
+         reward_weights={'connectivity': 0.01, 'increemental': 1.0}, guiding_path_weights=[1.0],
+         ucb=None, uniform_only=False, normal_only=False):
 
     global dist_plotting
 
@@ -102,6 +102,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
 
     dmp_time = guiding_paths[0]
     time_reso = dmp_time[1][2] - dmp_time[0][2]
+    print("time reso is: ", time_reso)
     dmp_x_min = np.min(dmp_time[:, 0])
     dmp_y_min = np.min(dmp_time[:, 1])
     dmp_t_min = np.min(dmp_time[:, 2])
@@ -110,6 +111,7 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
     dmp_y_max = np.max(dmp_time[:, 1])
     dmp_t_max = np.max(dmp_time[:, 2])
 
+    print("dmp_t_max is: ", dmp_t_max)
     avg_distance = 0.0
     for i in range(0, len(dmp_time) - 1):
         avg_distance += math.sqrt((dmp_time[i][0] - dmp_time[i+1][0]) ** 2 + (dmp_time[i][1] - dmp_time[i+1][1]) ** 2
@@ -132,12 +134,19 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
 
     vertices = [start, goal]
     roadmap = {0: [], 1: []}
-    uf = UF(2)
-    mean1 = [ucb.values[0]]
-    mean2 = [ucb.values[1]]
 
-    ucb1 = []
-    ucb2 = []
+    # declare the union-find object
+    uf = UF(2)
+
+    if ucb is not None:
+        print("ucb is not None")
+        mean1 = [ucb.values[0]]
+        mean2 = [ucb.values[1]]
+
+        print("mean1 and mean2 are: ", (mean1, mean2))
+
+        ucb1 = []
+        ucb2 = []
 
     # add points for reaching the goal(x,y) at different times
     num_goal_pts = 20
@@ -156,23 +165,30 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
     increemental_reward = []
     connectivity_reward = []
     while len(vertices) < num_points:
-        arm, ucb_values = ucb.select_arm()
-        if ucb_values is not None:
-            ucb1.append(ucb_values[0])
-            ucb2.append((ucb_values[1]))
+        if ucb is not None:
+            arm, ucb_values = ucb.select_arm()
+            if ucb_values is not None:
+                ucb1.append(ucb_values[0])
+                ucb2.append((ucb_values[1]))
+
+        else:
+            if uniform_only:
+                arm = 0
+
+            elif normal_only:
+                arm = 1
 
         if arm == 0:
             x, y, t = sample_uniform(dmp_x_min - 0.1, dmp_y_min - 0.1, 0,
                                     dmp_x_max + 0.1, dmp_y_max + 0.1, dmp_t_max + 0.1)
 
-        else:
+        elif arm == 1:
 
             # print("SAMPLED FROM DMP_NORMAL")
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
         # get the dmp-time proximity reward.
-
         reward = reward_weights['increemental'] * \
             get_state_reward(x, y, t, guiding_paths=guiding_paths, weights=guiding_path_weights,
                              obstacles=obstacles)
@@ -183,11 +199,13 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
         # ensures whether the sampled state is feasible.
         if reward > 0 or reward_weights['connectivity'] > 0.0:
 
-            if arm == 0:
-                plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
-
-            elif arm == 1:
-                plt2d.plot(x, y, marker="+", color='r', markersize=2.0)
+            # if arm == 0:
+            #     if ucb is not None:
+            #         plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
+            #
+            # elif arm == 1:
+            #     if ucb is not None:
+            #         plt2d.plot(x, y, marker="+", color='r', markersize=2.0)
 
             # add the 2D node to the union find object
             edges = []
@@ -273,19 +291,21 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
                 con_reward = 0.0
                 connectivity_reward.append(con_reward)
 
-        ucb.update(arm, reward)
-        mean1.append(ucb.values[0])
-        mean2.append(ucb.values[1])
+        if ucb is not None:
+            ucb.update(arm, reward)
+            mean1.append(ucb.values[0])
+            mean2.append(ucb.values[1])
 
     print("length of roadmap is: ", len(roadmap))
 
-    plt_mean_reward.plot(mean1, 'bo', label='uniform')
-    plt_mean_reward.plot(mean2, 'r+', label='dmp_normal')
-    plt_mean_reward.legend()
+    if ucb is not None:
+        plt_mean_reward.plot(mean1, 'bo', label='uniform')
+        plt_mean_reward.plot(mean2, 'r+', label='dmp_normal')
+        plt_mean_reward.legend()
 
-    plt_reward.plot(increemental_reward, label='increemental')
-    plt_reward.plot(connectivity_reward, label='connectivity')
-    plt_reward.legend()
+        plt_reward.plot(increemental_reward, label='increemental')
+        plt_reward.plot(connectivity_reward, label='connectivity')
+        plt_reward.legend()
 
     # plt_connectivity_reward.plot(connectivity_reward)
     increemental_reward = np.array(increemental_reward)
@@ -294,17 +314,25 @@ def plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=200
     print("min in the increemental reward array is: ", np.min(increemental_reward))
     print("plt mean reward done..")
 
-    plt_ucb.plot(ucb1, label='uniform')
-    plt_ucb.plot(ucb2, label='dmp normal')
-    plt_ucb.legend()
+    if ucb is not None:
+        plt_ucb.plot(ucb1, label='uniform')
+        plt_ucb.plot(ucb2, label='dmp normal')
+        plt_ucb.legend()
 
-    plt_connected.plot(conn_comp_arr)
+    if ucb is not None:
+        plt_connected.plot(conn_comp_arr, label='ucb')
+
+    elif uniform_only:
+        plt_connected.plot(conn_comp_arr, label='uniform')
+
+    elif normal_only:
+        plt_connected.plot(conn_comp_arr, label='normal')
 
     return vertices, roadmap, ucb, edge_resolution
 
 
 def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guiding_path_weights=None,
-                      edge_resolution=None, use_discretised_cost=True):
+                      edge_resolution=None, use_discretised_cost=True, ucb_path=True):
 
     global dist_plotting
     # plotted_once = False
@@ -338,14 +366,15 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
         # show graph
         if show_animation and len(closedset.keys()) % 2 == 0:
-            if current.points[0][1][3] == -1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=8)
+            if ucb_path:
+                if current.points[0][1][3] == -1:
+                    plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=8)
 
-            elif current.points[0][1][3] == 0:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=8)
+                elif current.points[0][1][3] == 0:
+                    plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=8)
 
-            elif current.points[0][1][3] == 1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=8)
+                elif current.points[0][1][3] == 1:
+                    plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=8)
 
             # ax.scatter(current.points[0][0][0], current.points[0][0][1], current.points[0][0][2])
 
@@ -415,7 +444,8 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
-                 reward_weights={'connectivity': 1.0, 'increemental': 0.1}):
+                 reward_weights={'connectivity': 1.0, 'increemental': 0.1}, use_ucb=True, uniform_only=False,
+                 normal_only=False):
 
     """
 
@@ -451,17 +481,31 @@ def PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=None, dmp_vel=None, gu
     print("vmax is: ", v_max)
     print("vmin is: ", v_min)
 
-    ucb = UCB()
-    ucb.initialize(2)
+    if use_ucb:
+        ucb = UCB()
+        ucb.initialize(2)
 
-    vertices, roadmap, ucb_updated, edge_reso = plan_ucb(start, goal, guiding_paths, obstacles, v_max, v_min,
+        vertices, roadmap, ucb_updated, edge_reso = plan(start, goal, guiding_paths, obstacles, v_max, v_min,
                                                          guiding_path_weights=guiding_path_weights,
                                                          ucb=ucb, reward_weights=reward_weights)
+        rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                                       guiding_paths=guiding_paths, edge_resolution=edge_reso)
 
-    rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
-                                   guiding_paths=guiding_paths, edge_resolution=edge_reso)
+    else:
+        if uniform_only:
+            vertices, roadmap, ucb_updated, edge_reso = plan(start, goal, guiding_paths, obstacles, v_max, v_min,
+                                                             guiding_path_weights=guiding_path_weights,
+                                                             uniform_only=True, reward_weights=reward_weights)
+            rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                                           guiding_paths=guiding_paths, edge_resolution=edge_reso, ucb_path=False)
+        elif normal_only:
+            vertices, roadmap, ucb_updated, edge_reso = plan(start, goal, guiding_paths, obstacles, v_max, v_min,
+                                                             guiding_path_weights=guiding_path_weights,
+                                                             normal_only=True, reward_weights=reward_weights)
+            rx, ry, rt = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                                           guiding_paths=guiding_paths, edge_resolution=edge_reso, ucb_path=False)
 
-    return rx, ry, rt, ucb_updated
+    return rx, ry, rt
 
 
 def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_path_weights, edge_resolution):
@@ -535,10 +579,11 @@ def main(path_x=None, path_y=None):
               (60.0 * 0.01, 30.0 * 0.01)]
     poly1 = Polygon(coords)
 
-    coords2 = [(25.0, 15.0), (25.0, 25.0), (35.0, 25.0), (35.0, 15.0)]
+    coords2 = [(25.0 * 0.01, 15.0 * 0.01), (25.0 * 0.01, 25.0 * 0.01), (35.0 * 0.01, 25.0 * 0.01),
+               (35.0 * 0.01, 15.0 * 0.01)]
     poly2 = Polygon(coords2)
 
-    obstacles = [poly1]
+    obstacles = []
     # obstacles = []
     print("[INFO]: obstacles created")
 
@@ -595,20 +640,50 @@ def main(path_x=None, path_y=None):
     dmp_time_para = np.array(dmp_time_para)
     dmp_dy_time_para = np.array(dmp_dy_time_para)
 
-    rx, ry, rt, ucb = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para], dmp_vel=dmp_dy_time_para)
+    rx, ry, rt = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para], dmp_vel=dmp_dy_time_para)
 
+    rx_uniform, ry_uniform, rt_uniform = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
+                                                      dmp_vel=dmp_dy_time_para, use_ucb=False, uniform_only=True)
+
+    rx_normal, ry_normal, rt_normal = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
+                                                   dmp_vel=dmp_dy_time_para, use_ucb=False, normal_only=True)
     rx = np.array(rx)
     ry = np.array(ry)
     rt = np.array([rt])
     print("shape of rx is: ", rx.shape)
-
     print("rt is: ", rt)
-    plot = ax.plot_wireframe(rx, ry, rt)
-    plot_paths.append(plot)
-    legend_key.append('dijkstra')
-    plt.legend(plot_paths, legend_key, loc='lower right')
-    plt2d.plot(rx, ry, label='final path')
+
+    rx_uniform = np.array(rx_uniform)
+    ry_uniform = np.array(ry_uniform)
+    rt_uniform = np.array([rt_uniform])
+
+    print("rt uniform is: ", rt_uniform)
+
+    rx_normal = np.array(rx_normal)
+    ry_normal = np.array(ry_normal)
+    rt_normal = np.array([rt_normal])
+
+    print("rt uniform is: ", rt_normal)
+
+    plot = ax.plot_wireframe(rx, ry, rt, color='k', label='ucb')
+    # plot_paths.append(plot)
+    # legend_key.append('ucb3D')
+
+    plot = ax.plot_wireframe(rx_uniform, ry_uniform, rt_uniform, color='c', label='uniform')
+    # plot_paths.append(plot)
+    # legend_key.append('uniform3D')
+
+    plot = ax.plot_wireframe(rx_normal, ry_normal, rt_normal, color='m', label='normal')
+    # plot_paths.append(plot)
+    # legend_key.append('normal3D')
+
+    # plt.legend(plot_paths, legend_key, loc='lower right')
+    ax.legend()
+    plt2d.plot(rx, ry, color='k', label='ucb path')
+    plt2d.plot(rx_uniform, ry_uniform, color='c', label='uniform path')
+    plt2d.plot(rx_normal, ry_normal, color='m', label='normal path')
     plt2d.legend()
+    plt_connected.legend()
     plt.show()
 
 
