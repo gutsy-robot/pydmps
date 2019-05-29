@@ -129,6 +129,7 @@ def dijkstra_planning(sx, sy, gx, gy, obstacles, reso, cost_type="default", dmp=
 def calc_final_path(ngoal, closedset, reso):
     # generate final course
     print("calculate final path called")
+    path_cost = 0.0
     rx, ry = [ngoal.x * reso], [ngoal.y * reso]
     pind = ngoal.pind
     while pind != -1:
@@ -136,11 +137,12 @@ def calc_final_path(ngoal, closedset, reso):
         n = closedset[pind]
         rx.append(n.x * reso)
         ry.append(n.y * reso)
+        path_cost += n.cost
         pind = n.pind
 
     print("final path calculated..")
 
-    return rx, ry
+    return rx, ry, path_cost
 
 
 def verify_node(node, obmap, minx, miny, maxx, maxy):
