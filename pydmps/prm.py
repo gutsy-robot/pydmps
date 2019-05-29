@@ -188,17 +188,7 @@ def dijkstra_planning(sx, sy, gx, gy, road_map, sample_x, sample_y, obstacles, d
 
     """
 
-    # vx_max = max(dmp_vel[:, 0])
-    # vy_max = max(dmp_vel[:, 1])
-    #
-    # vx_min = min(dmp_vel[:, 0])
-    # vy_min = min(dmp_vel[:, 1])
-
-    # distance = sqrt(motion_y ** 2 + motion_x ** 2)
-    #
-    # del_tmax = distance / v_min
-    # del_tmin = distance / v_max
-
+  
     vel = []
     for v in dmp_vel:
         vel.append(math.sqrt(v[0] ** 2 + v[1] ** 2))
@@ -295,6 +285,7 @@ def plot_road_map(road_map, sample_x, sample_y):  # pragma: no cover
                      [sample_y[i], sample_y[ind]], "-k")
 
 
+# returns collision free dmp points and the ones uniformly sampled from the given boundaries.
 def sample_points(sx, sy, gx, gy, obstacles, minx=20, miny=40, maxx=60, maxy=130, num_points=500, dmp=None):
 
     sample_x, sample_y = [], []
@@ -333,7 +324,8 @@ def sample_points(sx, sy, gx, gy, obstacles, minx=20, miny=40, maxx=60, maxy=130
     return sample_x, sample_y
 
 
-def sample_normal(sx, sy, gx, gy, obstacles, dmp=None):
+def sample_normal(sx, sy, gx, gy, obstacles, dmp=None, variance=5.0, num_pts=1000):
+
     sample_x, sample_y = [], []
 
     for pt in dmp:
@@ -348,7 +340,7 @@ def sample_normal(sx, sy, gx, gy, obstacles, dmp=None):
             sample_x.append(pt[0])
             sample_y.append(pt[1])
             mean = [pt[0], pt[1]]
-            cov = [[50, 0], [0, 50]]
+            cov = [[variance, 0], [0, variance]]
             x, y = np.random.multivariate_normal(mean, cov, 10).T
             for i in range(0, len(x)):
                 point = Point((x[i], y[i]))
@@ -363,7 +355,7 @@ def sample_normal(sx, sy, gx, gy, obstacles, dmp=None):
 
         else:
             mean = [pt[0], pt[1]]
-            cov = [[200, 0], [0, 200]]
+            cov = [[2 * variance, 0], [0, 2 * variance]]
             x, y = np.random.multivariate_normal(mean, cov, 100).T
             for i in range(0, len(x)):
                 point = Point((x[i], y[i]))
@@ -384,6 +376,35 @@ def sample_normal(sx, sy, gx, gy, obstacles, dmp=None):
     return sample_x, sample_y
 
 
+def sample_dmp_normal(sx, sy, gx, gy, dmp=None, obstacles=None, num_points=1000, variance=0.5):
+    print("sample dmp normal called..")
+    sample_x = []
+    sample_y = []
+    while len(sample_x) < num_points:
+        index = random.randint(0, len(dmp) - 1)
+        mean = [dmp[index][0], dmp[index][1]]
+
+        cov = [[variance, 0], [0, variance]]
+
+        x, y = np.random.multivariate_normal(mean, cov, 1).T
+        point = Point((x[0], y[0]))
+        collision = False
+        for obstacle in obstacles:
+            if obstacle.contains(point):
+                collision = True
+                break
+        if not collision:
+            sample_x.append(x[0])
+            sample_y.append(y[0])
+
+    sample_x.append(sx)
+    sample_y.append(sy)
+    sample_x.append(gx)
+    sample_y.append(gy)
+
+    return sample_x, sample_y
+
+
 def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obstacles=None):
 
     d = []
@@ -395,20 +416,6 @@ def calculate_dmp_cost(x, y, t, motion_x, motion_y, delta_t, dmp, dmp_vel, obsta
     d = np.array(d)
 
     min_index = np.argmin(d)
-
-    # vx = motion_x / delta_t
-    # vy = motion_y / delta_t
-    #
-    # d_vel = []
-    #
-    # for pt in dmp:
-    #     # print("cost due to time is:  ", (t - pt[2]) ** 2)
-    #     # print("cost due to x is:  ", (x - pt[0]) ** 2)
-    #     distance = sqrt((x - pt[0]) ** 2 + (y - pt[1]) ** 2 + (t - pt[2]) ** 2)
-    #     d_vel.append(distance)
-    #
-    # d_vel = np.array(d_vel)
-    # min_index_vel = np.argmin(d_vel)
 
     cost = sqrt((x + motion_x - dmp[min_index][0]) ** 2 + (y + motion_y - dmp[min_index][1]) ** 2
                 + (t + delta_t - dmp[min_index][2]) ** 2)
