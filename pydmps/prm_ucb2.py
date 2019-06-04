@@ -7,7 +7,8 @@ from shapely.geometry import Point, mapping
 from math import sqrt, ceil, floor
 from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, ind_max
 from dmp_discrete import DMPs_discrete
-from kdtree import Node, KDTree
+from kdtree import Node
+from kdtree import KDTree as DynamicKDTree
 from union_find import UF
 from ucb import UCB
 from mpl_toolkits.mplot3d import axes3d
@@ -18,6 +19,7 @@ from statistics import mean
 
 
 def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None, use_obstacle_cost=True):
+
     if t < 0:
         return 1 / 100000
 
@@ -35,8 +37,8 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
         d = np.array(d)
 
         min_index = np.argmin(d)
-        cost = sqrt((x - guiding_path[min_index][0]) ** 2 + (y - guiding_path[min_index][1]) ** 2
-                    + (t - guiding_path[min_index][2]) ** 2)
+        cost = sqrt((x - guiding_path[min_index][0]) ** 2 + (y - guiding_path[min_index][1]) ** 2)
+        #            + (t - guiding_path[min_index][2]) ** 2)
 
         obstacle_cost = 0
         if use_obstacle_cost:
@@ -55,7 +57,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
                         obst_potential_pt = list(p.coords)[0]
                         dist = sqrt((y - obst_potential_pt[1]) ** 2 +
                                     (x - obst_potential_pt[0]) ** 2)
-                        obstacle_cost += 100 / ((dist + 0.0000001) ** 2)
+                        obstacle_cost += 1 / ((dist + 0.0000001) ** 2)
 
         if use_obstacle_cost:
             cost += obstacle_cost
@@ -63,6 +65,16 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
         cost_total += weight * cost
 
     return 1 / cost_total
+
+
+def calculate_avg_distance(path):
+    avg_distance = 0.0
+    for i in range(0, len(path) - 1):
+        avg_distance += math.sqrt(
+            (path[i][0] - path[i + 1][0]) ** 2 + (path[i][1] - path[i + 1][1]) ** 2
+            + (path[i][2] - path[i + 1][2]) ** 2)
+
+    return avg_distance / len(path)
 
 
 def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
@@ -88,13 +100,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     dmp_t_max = np.max(dmp_time[:, 2])
 
     print("dmp_t_max is: ", dmp_t_max)
-    avg_distance = 0.0
-    for i in range(0, len(dmp_time) - 1):
-        avg_distance += math.sqrt(
-            (dmp_time[i][0] - dmp_time[i + 1][0]) ** 2 + (dmp_time[i][1] - dmp_time[i + 1][1]) ** 2
-            + (dmp_time[i][2] - dmp_time[i + 1][2]) ** 2)
-
-    avg_distance /= len(dmp_time)
+    avg_distance = calculate_avg_distance(dmp_time)
 
     neighbor_radius = neighbor_radius_factor * avg_distance
     edge_resolution = edge_resolution_factor * avg_distance
@@ -103,7 +109,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
     print("max for uniform distribution is: ", (dmp_x_max, dmp_y_max, dmp_t_max))
 
-    tree = KDTree()
+    tree = DynamicKDTree()
     tree.add(start.points[0][0], start.points[0][1])
     tree.add(goal.points[0][0], goal.points[0][1])
 
@@ -126,7 +132,6 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         ucb2 = []
 
     # add points for reaching the goal(x,y) at different times
-
     for i in range(1, num_goal_pts):
         t = i * time_reso + goal.points[0][0][2]
 
@@ -139,8 +144,10 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
     print("length of vertices is: ", len(vertices))
     print("num_points are: ", num_points)
+
     increemental_reward = []
     connectivity_reward = []
+
     while len(vertices) < num_points:
         if ucb is not None:
             arm, ucb_values = ucb.select_arm()
@@ -160,8 +167,6 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                      dmp_x_max + 0.1, dmp_y_max + 0.1, dmp_t_max + 0.5)
 
         elif arm == 1:
-
-            # print("SAMPLED FROM DMP_NORMAL")
             i = random.randint(0, len(dmp_time) - 1)
             x, y, t = sample_dmp_normal(dmp_time[i][0], dmp_time[i][1], dmp_time[i][2])
 
@@ -173,7 +178,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         increemental_reward.append(reward)
 
         # ensures whether the sampled state is feasible.
-        if reward > 0 or reward_weights['connectivity'] > 0.0:
+        if reward > 1/100000:
             if plot_sampled_pts:
                 if arm == 0:
                     if ucb is not None:
@@ -196,7 +201,9 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             uf.add(sampled_pt_id)
 
             for n in neighbors:
-                if n[1][0] == 0 or n[1][0] == 1:
+
+                # CHANGE WAS MADE HERE
+                if n[1][0] == 0:
 
                     # if the points are the original start or goal the id in UF and roadmap is the same
                     # neighbor_id = n[1][0]
@@ -378,6 +385,9 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
             node = vertices[n_id]
 
+            if n_id in closedset:
+                continue
+
             if use_discretised_cost:
                 edge_cost = calculate_discretised_edge_cost(node.points[0], vertices[c_id].points[0],
                                                             guiding_paths, guiding_path_weights,
@@ -390,11 +400,10 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
             node.points[0][1][2] = c_id
 
-            if n_id in closedset:
-                continue
             # Otherwise if it is already in the open set
             if n_id in openset:
                 if openset[n_id].points[0][1][1] > node.points[0][1][1]:
+
                     openset[n_id].points[0][1][1] = node.points[0][1][1]
                     openset[n_id].points[0][1][2] = c_id
             else:
@@ -470,18 +479,24 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
     edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
                             (origin[0][2] - destination[0][2]) ** 2)
 
+    print("cost of origin is: ", origin[1][1])
+    print("cost of destination is: ", destination[1][1])
+
     if edge_length <= edge_resolution:
+        print("edge length is less than edge resolution")
         cost = destination[1][1]
 
     else:
+        print("edge length is more than edge resolution")
         guiding_path_index = np.argmax(np.array(guiding_path_weights))
         guiding_path = guiding_paths[guiding_path_index]
-        intermediate_pts = [(origin[0][0], origin[0][1], origin[0][2])]
+        #  intermediate_pts = [(origin[0][0], origin[0][1], origin[0][2])]
         k = int(edge_length / edge_resolution)
         if k > 1:
-            dmp_cost = 0
-            incremental_cost = 0
-            obstacle_cost = 0
+            # dmp_cost = 0
+            # incremental_cost = 0
+            # obstacle_cost = 0
+
             for i in range(1, k):
                 temp_x = (i * origin[0][0] + (k - i) * destination[0][0]) / k
                 temp_y = (i * origin[0][1] + (k - i) * destination[0][1]) / k
@@ -503,9 +518,10 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
 
                 cost += c
 
-            else:
-                cost = destination[1][1]
+        else:
+            cost = destination[1][1]
 
+    print("cost returned by discretised cost is: ", cost)
     return cost
 
 
