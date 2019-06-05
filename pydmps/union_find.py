@@ -84,27 +84,27 @@ class UF:
     def union(self, p, q):
         """Combine sets containing p and q into a single set."""
         # print("calling union")
-        print("sampled_pt id is: ", p)
-        print("neighbor pt id is: ", q)
+        # print("sampled_pt id is: ", p)
+        # print("neighbor pt id is: ", q)
         id = self._id
         rank = self._rank
 
         i = self.find(p)
         j = self.find(q)
 
-        print("sampled_pt parent is: ", i)
-        print("neigbor pt parent is: ", j)
+        # print("sampled_pt parent is: ", i)
+        # print("neigbor pt parent is: ", j)
         if i == j:
-            print("already in the same strongly connected component")
+            # print("already in the same strongly connected component")
             return
 
         self._count -= 1
-        print("one connected component would be reduced..")
+        # print("one connected component would be reduced..")
         if rank[i] < rank[j]:
-            print("neighbor id assigned to the sampled point")
+            # print("neighbor id assigned to the sampled point")
             id[i] = j
         elif rank[i] > rank[j]:
-            print("sampled pt id assigned to the neighbor")
+            # print("sampled pt id assigned to the neighbor")
             id[j] = i
         else:
             # print("neighbor id assigned to the sampled point")
