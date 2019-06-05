@@ -9,7 +9,6 @@ import math
 
 
 def get_trajectory(csvfile):
-    # print("get trajectory called...")
     path_x = []
     path_y = []
 
@@ -82,22 +81,6 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
             x, y = obstacle.exterior.xy
             plt.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
 
-        # obst_y = list(np.linspace(7.7, 8.2, num=20)) + [8.2] * 10 + list(np.linspace(7.7, 8.2, num=20)) + [7.7] * 10
-        # obst_x = [5.0] * 20 + list(np.linspace(5.0, 5.25, num=10)) + [5.25] * 20 + list(np.linspace(5.0, 5.25, num=10))
-        # obst = []
-        # for e in zip(obst_x, obst_y):
-        #     obst.append(np.asarray(e))
-        #
-        # obst = np.array(obst)
-        # print("obstacles are: ", obst)
-        # for o in obst:
-        #     plt.plot(o[0], o[1], 'bo')
-
-        # plt.plot(5.6, 6.6, 'bo')
-        # plt.annotate("obstacle1", (5.6, 6.6))
-        # plt.plot(4.0, 8.0, 'bo')
-        # plt.annotate("obstacle2", (4.0, 8.0))
-
         y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
         plot, = plt.plot(y_track_nc[:, 0], y_track_nc[:, 1])
         plot_paths.append(plot)
@@ -119,8 +102,6 @@ def plot_path(x, y, n_bfs=[30], start=[5.0, 6.0], goal=[5.3, 8.0], obstacles=Non
                 print("trying gamma= ", gamma)
                 y_track, dy_track, ddy_track, obst_closest_pts = dmp.rollout(external_force=avoid_obstacles,
                                                                              obstacles=obstacles, gamma=gamma)
-                # plot, = plt.plot(y_track[:, 0], y_track[:, 1])
-                # plot_paths.append(plot)
                 path_points = [Point(tuple(x)) for x in y_track]
                 collision = check_collision(path_points, obstacles)
                 # legend_key.append('gamma= ' + str(gamma))
@@ -167,15 +148,12 @@ def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
     :return:
     """
 
-    # print("gamma is: ", gamma)
-    # print("avoid obstacles called..")
 
     R_halfpi = np.array([[np.cos(np.pi / 2.0), -np.sin(np.pi / 2.0)],
                          [np.sin(np.pi / 2.0), np.cos(np.pi / 2.0)]])
     obst_closest_pts = []
     pot = np.zeros(2)
-    # print("y is: ", y)
-    # print("dy is: ", dy)
+
     for i in range(0, len(obstacles)):
         # based on (Hoffmann, 2009)
         obstacle = obstacles[i]
@@ -216,8 +194,7 @@ def avoid_obstacles(y, dy, goal, obstacles, gamma, beta=20.0 / np.pi):
                 pval = 0
 
             pot += pval
-    # print("p is: ", p)
-    # print("returned obst_closest_pts are: ", obst_closest_pts)
+
     return pot, obst_closest_pts
 
 
@@ -248,20 +225,15 @@ def check_collision(path_points, obstacles):
     return collision
 
 
-def sample_dmp_normal(x_dmp, y_dmp, t_dmp):
+def sample_dmp_normal(x_dmp, y_dmp, t_dmp, variance=0.05):
     mean = [x_dmp, y_dmp, t_dmp]
-    cov = [[0.05, 0, 0], [0, 0.05, 0], [0, 0, 0.05]]
+    cov = [[variance, 0, 0], [0, variance, 0], [0, 0, variance]]
     x, y, t = np.random.multivariate_normal(mean, cov, 1).T
-
-    return x, y, t
+    # print("point returned from dmp_normal: ", (x, y, t))
+    return x[0], y[0], t[0]
 
 
 def sample_uniform(minx, miny, mint, maxx, maxy, maxt):
-    # x = (random.random() - minx) * (maxx - minx)
-    # y = (random.random() - miny) * (maxy - miny)
-    # t = (random.random() - mint) * (maxt - mint)
-    # if math.sqrt((x - 10.0) ** 2 + (y - 10.0) ** 2 + t **2) < 9.0:
-    #     print("point sampled should be in the roadmap of t[0]")
 
     x = np.random.uniform(low=minx, high=maxx, size=1)[0]
     y = np.random.uniform(low=miny, high=maxy, size=1)[0]
