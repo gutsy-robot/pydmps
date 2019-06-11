@@ -30,7 +30,7 @@ complexity:
       <http://en.wikipedia.org/wiki/Ackermann_function#Inverse>`_.
 
 """
-
+from copy import deepcopy
 
 class UF:
     """
@@ -57,18 +57,26 @@ class UF:
         # node with a greater rank is bigger
         self._rank = [0] * N
 
-    def find(self, p):
+    def find(self, p, show=False):
         """
         Find the set identifier for the item p.
 
         """
         # print("calling find on: ", p)
         id = self._id
+        # if show:
+        #     print("starting with: ", p)
 
         while p != id[p]:
-            p = id[p] = id[id[p]]   # Path compression using halving.
+            # p = id[p] = id[id[p]]   # Path compression using halving.
+            p = id[p]
+            # if show:
+            #     print("p inside the loop is: ", p)
 
         # print("find returned: ", p)
+        # if show:
+        #     print("returning: ", p)
+        #     print("id[p]: ", id[p])
         return p
 
     def count(self):
@@ -86,11 +94,18 @@ class UF:
         # print("calling union")
         # print("sampled_pt id is: ", p)
         # print("neighbor pt id is: ", q)
+        # initial_nscc = len(self.get_scc().keys())
+        # print("initial number of nscc: ", initial_nscc)
+        # print("initial count is: ", self.count())
+        # print("initial id array(before find p) is: ", self._id)
         id = self._id
         rank = self._rank
+        # print("calling find on: ", p)
+        i = self.find(p, show=True)
 
-        i = self.find(p)
-        j = self.find(q)
+        # print("calling find on: ", q)
+        # print("id array before find q is: ", self._id)
+        j = self.find(q, show=True)
 
         # print("sampled_pt parent is: ", i)
         # print("neigbor pt parent is: ", j)
@@ -110,6 +125,18 @@ class UF:
             # print("neighbor id assigned to the sampled point")
             id[i] = j
             rank[j] += 1
+
+        # if id != self._id:
+        #     print("WE HAVE A BIGGER PROBLEM HERE..")
+
+        # final_nscc = len(self.get_scc().keys())
+        # if final_nscc - initial_nscc != -1:
+        #     print("ERROR IN UNIONING: ", (p, q))
+        #     print("difference in scc is: ", final_nscc - initial_nscc)
+        #     print("find for p returned: ", i)
+        #     print("find for q returned: ", j)
+        #     # print("id array before:  ", id_array_before)
+        #     print("id array later: ", self._id)
 
     def add(self, p):
         self._id.append(p)
@@ -132,6 +159,9 @@ class UF:
 
         return scc
 
+    def get_info(self):
+        return self._id, self._rank, self._count
+
     def __str__(self):
         """String representation of the union find object."""
         return " ".join([str(x) for x in self._id])
@@ -141,45 +171,33 @@ class UF:
         return "UF(" + str(self) + ")"
 
 
-# uf = UF(10)
+# uf = UF(2)
 #
-# print("after initialising count is: ", uf.count())
-# print("after initialising id is: ", uf._id)
-# print("after initialising rank is: ", uf._rank)
+# uf.add(2)
+# uf.add(3)
+# uf.add(4)
 #
+# print("id and rank are: ", uf.get_info())
 #
 # uf.union(0, 1)
-# uf.union(3, 1)
-# uf.union(4, 1)
-# uf.union(5, 1)
+# print("after union 0 and 1...")
+# print("id and rank are: ", uf.get_info())
 #
-# print("after 4 union operations count is: ", uf.count())
-# print("after 4 union operations id is: ", uf._id)
-# print("after 4 union operations rank is: ", uf._rank)
 #
-# uf.union(6, 2)
-# uf.union(7, 2)
-# uf.union(8, 2)
-# uf.union(9, 2)
+# uf.union(3, 2)
+# print("after union 2 and 3...")
+# print("id and rank are: ", uf.get_info())
 #
-# print("after first set of unions scc is: ", uf.get_scc())
+# uf.union(1, 4)
+# print("after union 1 and 4...")
+# print("id and rank are: ", uf.get_info())
 #
-# uf.union(0, 7)
-# uf.union(4, 7)
-# uf.union(5, 8)
-# print("after final union operations count is: ", uf.count())
-# print("after final union operations id is: ", uf._id)
-# print("after final union operations rank is: ", uf._rank)
+# uf.union(1, 2)
+# print("after union 1 and 2...")
+# print("id and rank are: ", uf.get_info())
 #
-# print("--------")
-# print("scc after all operations is: ", uf.get_scc())
+# uf.union(2, 1)
+# print("after union 2 and 1...")
+# print("id and rank are: ", uf.get_info())
 
 
-#
-# uf.add(1000)
-# uf.union(3, 1000)
-# print("union 1000 and 3")
-# print("after adding 3")
-# print("rank is: ", uf._rank)
-# print("id is: ", uf._id)
-# print("count is: ", uf.count())
