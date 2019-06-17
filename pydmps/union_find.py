@@ -57,26 +57,18 @@ class UF:
         # node with a greater rank is bigger
         self._rank = [0] * N
 
-    def find(self, p, show=False):
+    def find(self, p):
         """
         Find the set identifier for the item p.
 
         """
         # print("calling find on: ", p)
         id = self._id
-        # if show:
-        #     print("starting with: ", p)
 
         while p != id[p]:
             # p = id[p] = id[id[p]]   # Path compression using halving.
             p = id[p]
-            # if show:
-            #     print("p inside the loop is: ", p)
 
-        # print("find returned: ", p)
-        # if show:
-        #     print("returning: ", p)
-        #     print("id[p]: ", id[p])
         return p
 
     def count(self):
@@ -91,24 +83,15 @@ class UF:
 
     def union(self, p, q):
         """Combine sets containing p and q into a single set."""
-        # print("calling union")
-        # print("sampled_pt id is: ", p)
-        # print("neighbor pt id is: ", q)
-        # initial_nscc = len(self.get_scc().keys())
-        # print("initial number of nscc: ", initial_nscc)
-        # print("initial count is: ", self.count())
-        # print("initial id array(before find p) is: ", self._id)
         id = self._id
         rank = self._rank
         # print("calling find on: ", p)
-        i = self.find(p, show=True)
+        i = self.find(p)
 
         # print("calling find on: ", q)
         # print("id array before find q is: ", self._id)
-        j = self.find(q, show=True)
+        j = self.find(q)
 
-        # print("sampled_pt parent is: ", i)
-        # print("neigbor pt parent is: ", j)
         if i == j:
             # print("already in the same strongly connected component")
             return
@@ -125,18 +108,6 @@ class UF:
             # print("neighbor id assigned to the sampled point")
             id[i] = j
             rank[j] += 1
-
-        # if id != self._id:
-        #     print("WE HAVE A BIGGER PROBLEM HERE..")
-
-        # final_nscc = len(self.get_scc().keys())
-        # if final_nscc - initial_nscc != -1:
-        #     print("ERROR IN UNIONING: ", (p, q))
-        #     print("difference in scc is: ", final_nscc - initial_nscc)
-        #     print("find for p returned: ", i)
-        #     print("find for q returned: ", j)
-        #     # print("id array before:  ", id_array_before)
-        #     print("id array later: ", self._id)
 
     def add(self, p):
         self._id.append(p)

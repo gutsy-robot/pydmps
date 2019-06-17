@@ -178,12 +178,12 @@ def plan(start, goal, guiding_paths, obstacles, num_points=3000,
         if reward > 0:
             if plot_sampled:
                 if arm == 0:
-                    plt2d.plot(x, y, marker="+", color='b', markersize=2.5)
+                    plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
                     uniform_nodes.append(node_number)
                     node_number += 1
 
                 elif arm == 1:
-                    plt2d.plot(x, y, marker="+", color='r', markersize=2.5)
+                    plt2d.plot(x, y, marker="+", color='r', markersize=2.0)
                     normal_nodes.append(node_number)
                     node_number += 1
 
@@ -297,6 +297,8 @@ def plan(start, goal, guiding_paths, obstacles, num_points=3000,
     print("number of uniform nodes are: ", len(uniform_nodes))
     print("number of normal nodes are: ", len(normal_nodes))
     # plt.show()
+    print("start edges: ", roadmap[0])
+    print("goal edges: ", roadmap[1])
     return vertices, roadmap, ucb, edge_resolution
 
 
@@ -311,6 +313,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
     openset, closedset = dict(), dict()
     openset[0] = start
     print("added start node to the openset")
+    print("goal is: ", (goal.points[0][0][0], goal.points[0][0][1], goal.points[0][0][2]))
 
     while True:
         # print("loop agained")
@@ -354,7 +357,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
         if c_id == 1:
             print("goal is found!")
-            print("c_id is: ", c_id)
+            # print("c_id is: ", c_id)
             goal.points[0][1][2] = current.points[0][1][2]
             goal.points[0][1][1] = current.points[0][1][1]
             goal.points[0][0][2] = current.points[0][0][2]
@@ -365,9 +368,16 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
         del openset[c_id]
         # Add it to the closed set
         closedset[c_id] = current
+        # print("current point is: ", (current.points[0][0][0], current.points[0][0][1], current.points[0][0][2]))
+
+        if goal.points[0][0][0] == current.points[0][0][0] and goal.points[0][0][1] == current.points[0][0][1]:
+            print("goal found in the 2D space")
 
         for i in range(0, (len(road_map[c_id]))):
             n_id = road_map[c_id][i]
+            # if n_id == 1:
+            # # print("goal node is one of the neighbors")
+
             if n_id in closedset:
                 continue
 
@@ -447,7 +457,7 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths2d=None, guiding_p
 
     print("time at goal is: ", guiding_paths3d[0].tree.data[-1][2])
 
-    goal = Node([([gx, gy, guiding_paths3d[0].tree.data[-1][2]], [1, 0, -1, -1])])
+    goal = Node([([gx, gy, 0], [1, 0, -1, -1])])
 
     print("start and goal nodes declared..")
     vel = []
