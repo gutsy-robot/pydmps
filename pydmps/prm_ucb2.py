@@ -37,6 +37,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
                     point = Point((x, y))
 
                     if obstacle.contains(point):
+                        # print("returning neg reward")
                         return 1/epsilon, -1 * epsilon
 
                     else:
@@ -50,6 +51,14 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
                         obstacle_cost += obstacle_pot / ((dist + epsilon) ** 2)
                         # obstacle_cost += obstacle_pot / ((dist + epsilon) ** 2)
                 cost += obstacle_cost
+
+        else:
+            for obstacle in obstacles:
+                point = Point((x, y))
+
+                if obstacle.contains(point):
+                    # print("returning neg reward")
+                    return 1 / epsilon, -1 * epsilon
 
         cost_total += weight * cost
     return cost_total, math.exp(-1 * cost_total)
@@ -185,21 +194,22 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
         elif arm == 1:
             k = random.randint(0, len(dmp_time) - 1)
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov/ 10)
             times_arm2 += 1
 
         elif arm == 2:
             k = random.randint(0, len(dmp_time) - 1)
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 4)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 100)
             times_arm3 += 1
 
-        fraction_arm1 = times_arm1 / runs_ucb
-        fraction_arm2 = times_arm2 / runs_ucb
-        fraction_arm3 = times_arm3 / runs_ucb
+        if use_ucb:
+            fraction_arm1 = times_arm1 / runs_ucb
+            fraction_arm2 = times_arm2 / runs_ucb
+            fraction_arm3 = times_arm3 / runs_ucb
 
-        arm1_fraction_arr.append(fraction_arm1)
-        arm2_fraction_arr.append(fraction_arm2)
-        arm3_fraction_arr.append(fraction_arm3)
+            arm1_fraction_arr.append(fraction_arm1)
+            arm2_fraction_arr.append(fraction_arm2)
+            arm3_fraction_arr.append(fraction_arm3)
 
         # get the dmp-time proximity reward.
         node_cost, inc_reward = get_state_reward(x, y, t, guiding_paths=guiding_paths,
@@ -314,13 +324,13 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                 conn_comp_arr.append(n_connected_components_new)
 
                 if n_connected_components_new < n_connected_components:
-                    con_reward = reward_weights['connectivity'] * 0.7
+                    con_reward = reward_weights['connectivity'] * 1.5
                     reward += con_reward
                     connectivity_reward.append(con_reward)
                     n_connected_components = n_connected_components_new
 
                 elif n_connected_components > n_connected_components:
-                    con_reward = reward_weights['connectivity'] * 0.5
+                    con_reward = reward_weights['connectivity'] * 1.0
                     reward += con_reward
                     connectivity_reward.append(con_reward)
                     n_connected_components = n_connected_components_new
@@ -371,37 +381,38 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     if plot_roadmap:
         plot_road_map(roadmap, vertices, plt_roadmap)
 
-    print("number of uniform nodes are: ", len(uniform_nodes))
-    print("number of normal nodes are: ", len(normal_nodes))
-    print('number of runs of ucb: ', runs_ucb)
-    fraction_plotting_interval = int(runs_ucb / 10)
-    print("fraction plotting interval is: ", fraction_plotting_interval)
-    num_chosen_arm = []
-    frac_arm1 = []
-    frac_arm2 = []
-    frac_arm3 = []
-    print("length of arm1_fraction_arr is: ", len(arm1_fraction_arr))
-    print("length of arm2_fraction_arr is: ", len(arm2_fraction_arr))
-    print("length of arm3_fraction_arr is: ", len(arm3_fraction_arr))
-    for i in range(0, 10):
-        ind = (i + 1) * fraction_plotting_interval - 1
-        print("ind is: ", ind)
-        num_chosen_arm.append(ind + 1)
-        frac_arm1.append(arm1_fraction_arr[ind])
-        frac_arm2.append(arm2_fraction_arr[ind])
-        frac_arm3.append(arm3_fraction_arr[ind])
+    if use_ucb:
+        print("number of uniform nodes are: ", len(uniform_nodes))
+        print("number of normal nodes are: ", len(normal_nodes))
+        print('number of runs of ucb: ', runs_ucb)
+        fraction_plotting_interval = int(runs_ucb / 10)
+        print("fraction plotting interval is: ", fraction_plotting_interval)
+        num_chosen_arm = []
+        frac_arm1 = []
+        frac_arm2 = []
+        frac_arm3 = []
+        print("length of arm1_fraction_arr is: ", len(arm1_fraction_arr))
+        print("length of arm2_fraction_arr is: ", len(arm2_fraction_arr))
+        print("length of arm3_fraction_arr is: ", len(arm3_fraction_arr))
+        for i in range(0, 10):
+            ind = (i + 1) * fraction_plotting_interval - 1
+            print("ind is: ", ind)
+            num_chosen_arm.append(ind + 1)
+            frac_arm1.append(arm1_fraction_arr[ind])
+            frac_arm2.append(arm2_fraction_arr[ind])
+            frac_arm3.append(arm3_fraction_arr[ind])
 
-    print("fraction of arm1 is: ", frac_arm1)
-    print("fraction of arm2 is: ", frac_arm2)
-    plt_fraction.bar(pos, frac_arm1, bar_width, color='blue', edgecolor='black')
-    plt_fraction.bar(pos + bar_width, frac_arm2, bar_width, color='red', edgecolor='black')
-    plt_fraction.bar(pos + 2 * bar_width, frac_arm3, bar_width, color='green', edgecolor='black')
+        print("fraction of arm1 is: ", frac_arm1)
+        print("fraction of arm2 is: ", frac_arm2)
+        plt_fraction.bar(pos, frac_arm1, bar_width, color='blue', edgecolor='black')
+        plt_fraction.bar(pos + bar_width, frac_arm2, bar_width, color='red', edgecolor='black')
+        plt_fraction.bar(pos + 2 * bar_width, frac_arm3, bar_width, color='green', edgecolor='black')
 
-    plt_fraction.set_xticks(pos)
-    plt_fraction.set_xticklabels(num_chosen_arm)
-    plt_fraction.set_xlabel('Number of Nodes', fontsize=16)
-    plt_fraction.set_ylabel('Arm selection fraction', fontsize=16)
-    plt_fraction.legend(arms, loc=2)
+        plt_fraction.set_xticks(pos)
+        plt_fraction.set_xticklabels(num_chosen_arm)
+        plt_fraction.set_xlabel('Number of Nodes', fontsize=16)
+        plt_fraction.set_ylabel('Arm selection fraction', fontsize=16)
+        plt_fraction.legend(arms, loc=2)
 
     return vertices, roadmap, ucb, edge_resolution
 
@@ -443,24 +454,24 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
         current = openset[c_id]
 
         # show graph
-        if ucb_path:
-            if current.points[0][1][3] == -1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='y', markersize=4)
-                # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=4)
-
-            elif current.points[0][1][3] == 0:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=4)
-                # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=4)
-
-            elif current.points[0][1][3] == 1:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=4)
-                # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=4)
-
-            elif current.points[0][1][3] == 2:
-                plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=4)
-
-            else:
-                print("POINT FOUND WHICH WON'T BE USING ")
+        # if ucb_path:
+        #     if current.points[0][1][3] == -1:
+        #         plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='y', markersize=4)
+        #         # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=4)
+        #
+        #     elif current.points[0][1][3] == 0:
+        #         plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=4)
+        #         # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='b', markersize=4)
+        #
+        #     elif current.points[0][1][3] == 1:
+        #         plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=4)
+        #         # plt_dij.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='r', markersize=4)
+        #
+        #     elif current.points[0][1][3] == 2:
+        #         plt2d.plot(current.points[0][0][0], current.points[0][0][1], marker="x", color='g', markersize=4)
+        #
+        #     else:
+        #         print("POINT FOUND WHICH WON'T BE USING ")
 
         if c_id in range(1, (num_goal_pts + 1)):
             print("goal is found!")

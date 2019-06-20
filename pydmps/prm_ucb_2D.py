@@ -520,18 +520,21 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                                                             destination[0][2]]), 1)
 
         cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                         (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
+                         (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
 
     else:
 
         k = int(edge_length / edge_resolution)
         if k > 1:
+            edge_points = [origin[0]]
             for i in range(1, (k+1)):
                 temp_x = ((k - i) * origin[0][0] + i * destination[0][0]) / k
                 temp_y = ((k - i) * origin[0][1] + i * destination[0][1]) / k
                 temp_t = ((k - i) * origin[0][2] + i * destination[0][2]) / k
 
                 interm_pt = [temp_x, temp_y, temp_t]
+                e = math.sqrt((temp_x - edge_points[-1][0]) ** 2 + (temp_y - edge_points[-1][1]) ** 2)
+                edge_points.append(interm_pt)
 
                 closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
 
@@ -551,13 +554,13 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                                         (temp_x - obst_potential_pt[0]) ** 2)
                             obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
 
-                cost += c + obstacle_cost
+                cost += (c + obstacle_cost) * e
         else:
             closest_pt_index, _ = guiding_path.search(np.array([destination[0][0], destination[0][1],
                                                                 destination[0][2]]), 1)
 
             cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                             (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
+                             (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
 
     return cost
 
