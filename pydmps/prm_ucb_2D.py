@@ -189,7 +189,10 @@ def plan(start, goal, guiding_paths, obstacles, num_points=3000,
 
             # add the 2D node to the union find object
             edges = []
-            node = Node([([x, y, 0], [len(roadmap), 0.0, None, arm])])
+
+            # zero assigned to the t coordinate initially and changed dynamically during dijkstra search.
+            # cost is initialised as inf and updated during dijkstra's search
+            node = Node([([x, y, 0], [len(roadmap), math.inf, None, arm])])
 
             # might be useful to vary the distance as a function of num_points for asym. optimality
             # n_connected_components = uf.count()
@@ -457,7 +460,7 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths2d=None, guiding_p
 
     print("time at goal is: ", guiding_paths3d[0].tree.data[-1][2])
 
-    goal = Node([([gx, gy, 0], [1, 0, -1, -1])])
+    goal = Node([([gx, gy, 0], [1, math.inf, -1, -1])])
 
     print("start and goal nodes declared..")
     vel = []
