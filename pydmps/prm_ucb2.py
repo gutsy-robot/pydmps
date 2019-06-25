@@ -20,7 +20,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
                      obstacle_pot=1.0, epsilon=1/100000):
 
     if t < 0:
-        return 1/epsilon, -1 * epsilon
+        return -1 * epsilon
 
     cost_total = 0.0
     for i in range(0, len(guiding_paths)):
@@ -38,7 +38,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
 
                     if obstacle.contains(point):
                         # print("returning neg reward")
-                        return 1/epsilon, -1 * epsilon
+                        return -1 * epsilon
 
                     else:
 
@@ -61,7 +61,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
                     return 1 / epsilon, -1 * epsilon
 
         cost_total += weight * cost
-    return cost_total, math.exp(-1 * cost_total)
+    return math.exp(-1 * cost_total)
 
 
 def calculate_avg_distance(path):
@@ -212,11 +212,12 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             arm3_fraction_arr.append(fraction_arm3)
 
         # get the dmp-time proximity reward.
-        node_cost, inc_reward = get_state_reward(x, y, t, guiding_paths=guiding_paths,
-                                                 weights=guiding_path_weights,
-                                                 obstacles=obstacles,
-                                                 use_obstacle_cost=use_obstacle_cost,
-                                                 obstacle_pot=obstacle_pot)
+        inc_reward = get_state_reward(x, y, t, guiding_paths=guiding_paths,
+                                      weights=guiding_path_weights,
+                                      obstacles=obstacles,
+                                      use_obstacle_cost=use_obstacle_cost,
+                                      obstacle_pot=obstacle_pot)
+
         reward = reward_weights['increemental'] * inc_reward
 
         increemental_reward.append(reward)
@@ -604,55 +605,6 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
 
 def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_path_weights, edge_resolution,
                                     obstacles=[], use_obstacle_cost=True, obstacle_pot=1.0):
-
-    # cost = 0.0
-    # edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
-    #                         (origin[0][2] - destination[0][2]) ** 2)
-    #
-    # if edge_length <= edge_resolution:
-    #     cost = destination[1][1]
-    #
-    # else:
-    #     guiding_path_index = np.argmax(np.array(guiding_path_weights))
-    #     guiding_path = guiding_paths[guiding_path_index]
-    #     k = int(edge_length / edge_resolution)
-    #     if k > 1:
-    #         # print("value of k is: ", k)
-    #         for i in range(1, k):
-    #             # print("doing for i equal to: ", i)
-    #             temp_x = ((k - i) * origin[0][0] + i * destination[0][0]) / k
-    #             temp_y = ((k - i) * origin[0][1] + i * destination[0][1]) / k
-    #             temp_t = ((k - i) * origin[0][2] + i * destination[0][2]) / k
-    #
-    #             interm_pt = [temp_x, temp_y, temp_t]
-    #             # print("interm_pt is: ", interm_pt)
-    #
-    #             closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
-    #
-    #             c = math.sqrt((interm_pt[0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-    #                           (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
-    #             # print("c is: ", c)
-    #
-    #             obstacle_cost = 0
-    #             if use_obstacle_cost:
-    #                 if obstacles is not None:
-    #                     for obstacle in obstacles:
-    #                         point = Point((temp_x, temp_y))
-    #                         pol_ext = LinearRing(obstacle.exterior.coords)
-    #                         d = pol_ext.project(point)
-    #                         p = pol_ext.interpolate(d)
-    #                         obst_potential_pt = list(p.coords)[0]
-    #                         dist = sqrt((temp_y - obst_potential_pt[1]) ** 2 +
-    #                                     (temp_x - obst_potential_pt[0]) ** 2)
-    #                         obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
-    #
-    #             cost += c + obstacle_cost
-    #         cost += destination[1][1]
-    #
-    #     else:
-    #         cost = destination[1][1]
-    #
-    # return cost
 
     cost = 0.0
     edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
