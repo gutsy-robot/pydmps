@@ -139,7 +139,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
         # the last -1 is to indicate the point is not from a particular distribution
         n = Node([([goal.points[0][0][0], goal.points[0][0][1], t],
-                   [len(vertices), i * time_reso, -1, -1])])
+                   [len(vertices), math.inf, -1, -1])])
         tree.add(n.points[0][0], n.points[0][1])
         vertices.append(n)
         roadmap[len(roadmap)] = []
@@ -240,7 +240,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
             # add the 2D node to the union find object
             edges = []
-            node = Node([([x, y, t], [len(roadmap), node_cost, None, arm])])
+            node = Node([([x, y, t], [len(roadmap), math.inf, None, arm])])
 
             # might be useful to vary the distance as a function of num_points for asym. optimality
             sampled_pt_id = len(roadmap) - num_goal_pts + 1
@@ -545,12 +545,15 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
                  plt_roadmap=None, uniform_max=1.2, uniform_min=0.8, uniform_max_t=1.5, plt_dij=None, plt_nodes=None,
                  plt_fraction=None):
 
-    # declare node as ((x, y, t), (id, cost, pind, distribution))
+    # declare node as ((x, y, t), (node_id, cost, pind, distribution))
+    # pind represents the id of the previous node on the optimal path.
+
     start = Node([([sx, sy, 0], [0, 0, -1, -1])])
 
     print("time at goal is: ", guiding_paths[0].tree.data[-1][2])
 
-    goal = Node([([gx, gy, guiding_paths[0].tree.data[-1][2]], [1, 0, -1, -1])])
+    # goal = Node([([gx, gy, guiding_paths[0].tree.data[-1][2]], [1, 0, -1, -1])])
+    goal = Node([([gx, gy, guiding_paths[0].tree.data[-1][2]], [1, math.inf, -1, -1])])
 
     print("start and goal nodes declared..")
     vel = []
@@ -602,33 +605,86 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
 def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_path_weights, edge_resolution,
                                     obstacles=[], use_obstacle_cost=True, obstacle_pot=1.0):
 
+    # cost = 0.0
+    # edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
+    #                         (origin[0][2] - destination[0][2]) ** 2)
+    #
+    # if edge_length <= edge_resolution:
+    #     cost = destination[1][1]
+    #
+    # else:
+    #     guiding_path_index = np.argmax(np.array(guiding_path_weights))
+    #     guiding_path = guiding_paths[guiding_path_index]
+    #     k = int(edge_length / edge_resolution)
+    #     if k > 1:
+    #         # print("value of k is: ", k)
+    #         for i in range(1, k):
+    #             # print("doing for i equal to: ", i)
+    #             temp_x = ((k - i) * origin[0][0] + i * destination[0][0]) / k
+    #             temp_y = ((k - i) * origin[0][1] + i * destination[0][1]) / k
+    #             temp_t = ((k - i) * origin[0][2] + i * destination[0][2]) / k
+    #
+    #             interm_pt = [temp_x, temp_y, temp_t]
+    #             # print("interm_pt is: ", interm_pt)
+    #
+    #             closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
+    #
+    #             c = math.sqrt((interm_pt[0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
+    #                           (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
+    #             # print("c is: ", c)
+    #
+    #             obstacle_cost = 0
+    #             if use_obstacle_cost:
+    #                 if obstacles is not None:
+    #                     for obstacle in obstacles:
+    #                         point = Point((temp_x, temp_y))
+    #                         pol_ext = LinearRing(obstacle.exterior.coords)
+    #                         d = pol_ext.project(point)
+    #                         p = pol_ext.interpolate(d)
+    #                         obst_potential_pt = list(p.coords)[0]
+    #                         dist = sqrt((temp_y - obst_potential_pt[1]) ** 2 +
+    #                                     (temp_x - obst_potential_pt[0]) ** 2)
+    #                         obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
+    #
+    #             cost += c + obstacle_cost
+    #         cost += destination[1][1]
+    #
+    #     else:
+    #         cost = destination[1][1]
+    #
+    # return cost
+
     cost = 0.0
     edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
                             (origin[0][2] - destination[0][2]) ** 2)
-
+    guiding_path_index = np.argmax(np.array(guiding_path_weights))
+    guiding_path = guiding_paths[guiding_path_index]
     if edge_length <= edge_resolution:
-        cost = destination[1][1]
+
+        closest_pt_index, _ = guiding_path.search(np.array([destination[0][0], destination[0][1],
+                                                            destination[0][2]]), 1)
+
+        cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
+                         (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
 
     else:
-        guiding_path_index = np.argmax(np.array(guiding_path_weights))
-        guiding_path = guiding_paths[guiding_path_index]
+
         k = int(edge_length / edge_resolution)
         if k > 1:
-            # print("value of k is: ", k)
-            for i in range(1, k):
-                # print("doing for i equal to: ", i)
+            edge_points = [origin[0]]
+            for i in range(1, (k + 1)):
                 temp_x = ((k - i) * origin[0][0] + i * destination[0][0]) / k
                 temp_y = ((k - i) * origin[0][1] + i * destination[0][1]) / k
                 temp_t = ((k - i) * origin[0][2] + i * destination[0][2]) / k
 
                 interm_pt = [temp_x, temp_y, temp_t]
-                # print("interm_pt is: ", interm_pt)
+                e = math.sqrt((temp_x - edge_points[-1][0]) ** 2 + (temp_y - edge_points[-1][1]) ** 2)
+                edge_points.append(interm_pt)
 
                 closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
 
                 c = math.sqrt((interm_pt[0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
                               (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
-                # print("c is: ", c)
 
                 obstacle_cost = 0
                 if use_obstacle_cost:
@@ -643,14 +699,15 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                                         (temp_x - obst_potential_pt[0]) ** 2)
                             obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
 
-                cost += c + obstacle_cost
-            cost += destination[1][1]
-
+                cost += (c + obstacle_cost) * e
         else:
-            cost = destination[1][1]
+            closest_pt_index, _ = guiding_path.search(np.array([destination[0][0], destination[0][1],
+                                                                destination[0][2]]), 1)
+
+            cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
+                             (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
 
     return cost
-
 
 def plot_road_map(roadmap, vertices, plt_roadmap):
 
