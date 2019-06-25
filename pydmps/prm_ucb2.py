@@ -7,7 +7,8 @@ from dynamic_kdtree import KDTree as DynamicKDTree
 from union_find import UF
 from ucb import UCB
 from shapely.geometry.polygon import LinearRing, Polygon, LineString
-from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, ind_max
+from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, \
+    ind_max, calculate_discretised_edge_cost
 from statistics import mean
 from copy import deepcopy
 from mpl_toolkits.mplot3d import axes3d
@@ -602,64 +603,6 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
 
     return rx, ry, rt, path_cost, cost_array
 
-
-def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_path_weights, edge_resolution,
-                                    obstacles=[], use_obstacle_cost=True, obstacle_pot=1.0):
-
-    cost = 0.0
-    edge_length = math.sqrt((origin[0][0] - destination[0][0]) ** 2 + (origin[0][1] - destination[0][1]) ** 2 +
-                            (origin[0][2] - destination[0][2]) ** 2)
-    guiding_path_index = np.argmax(np.array(guiding_path_weights))
-    guiding_path = guiding_paths[guiding_path_index]
-    if edge_length <= edge_resolution:
-
-        closest_pt_index, _ = guiding_path.search(np.array([destination[0][0], destination[0][1],
-                                                            destination[0][2]]), 1)
-
-        cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                         (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
-
-    else:
-
-        k = int(edge_length / edge_resolution)
-        if k > 1:
-            edge_points = [origin[0]]
-            for i in range(1, (k + 1)):
-                temp_x = ((k - i) * origin[0][0] + i * destination[0][0]) / k
-                temp_y = ((k - i) * origin[0][1] + i * destination[0][1]) / k
-                temp_t = ((k - i) * origin[0][2] + i * destination[0][2]) / k
-
-                interm_pt = [temp_x, temp_y, temp_t]
-                e = math.sqrt((temp_x - edge_points[-1][0]) ** 2 + (temp_y - edge_points[-1][1]) ** 2)
-                edge_points.append(interm_pt)
-
-                closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
-
-                c = math.sqrt((interm_pt[0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                              (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
-
-                obstacle_cost = 0
-                if use_obstacle_cost:
-                    if obstacles is not None:
-                        for obstacle in obstacles:
-                            point = Point((temp_x, temp_y))
-                            pol_ext = LinearRing(obstacle.exterior.coords)
-                            d = pol_ext.project(point)
-                            p = pol_ext.interpolate(d)
-                            obst_potential_pt = list(p.coords)[0]
-                            dist = sqrt((temp_y - obst_potential_pt[1]) ** 2 +
-                                        (temp_x - obst_potential_pt[0]) ** 2)
-                            obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
-
-                cost += (c + obstacle_cost) * e
-        else:
-            closest_pt_index, _ = guiding_path.search(np.array([destination[0][0], destination[0][1],
-                                                                destination[0][2]]), 1)
-
-            cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                             (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
-
-    return cost
 
 def plot_road_map(roadmap, vertices, plt_roadmap):
 
