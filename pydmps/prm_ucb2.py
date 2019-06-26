@@ -194,7 +194,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
         elif arm == 1:
             k = random.randint(0, len(dmp_time) - 1)
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov/ 10)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 0.5)
             times_arm2 += 1
 
         elif arm == 2:

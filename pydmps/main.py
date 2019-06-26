@@ -13,7 +13,7 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "3arms/ucb_6000_4obst_temp3_obstacle_cost/"
+main_dir = "test_50iter_6000nodes_high_var/"
 try:
     os.mkdir(main_dir)
 
@@ -40,13 +40,13 @@ path_y = scaled_y
 
 edge_resolution_factor = 2.0
 neighbor_radius_factor = 10.0
-use_obstacle_cost = True
+use_obstacle_cost = False
 use_ucb = True
 num_goal_pts = 50
 uniform_only = False
 normal_only = False
 dynamic_radius = False
-num_points = 1000
+num_points = 6000
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
@@ -127,7 +127,7 @@ poly5 = Polygon(coords4)
 obstacles = [poly1, poly2, poly3, poly4]
 path_costs = []
 
-for i in range(0, 20):
+for i in range(0, 50):
 
     data_path = main_dir + str(i) + "/"
 

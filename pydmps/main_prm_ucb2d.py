@@ -13,7 +13,7 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "new_method_1000_no_obstacles/"
+main_dir = "new_method_2000_no_obstacles/"
 try:
     os.mkdir(main_dir)
 
@@ -46,7 +46,7 @@ use_ucb = True
 uniform_only = False
 normal_only = False
 dynamic_radius = False
-num_points = 1000
+num_points = 2000
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
