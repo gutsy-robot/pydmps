@@ -59,7 +59,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None,
 
                 if obstacle.contains(point):
                     # print("returning neg reward")
-                    return 1 / epsilon, -1 * epsilon
+                    return -1 * epsilon
 
         cost_total += weight * cost
     return math.exp(-1 * cost_total)
@@ -291,31 +291,43 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                     vel = dist_2d / (t_out - t)
                     if v_min <= vel <= v_max:
                         l = LineString([[x, y], [x_out, y_out]])
-                        intersect = False
-                        for obstacle in obstacles:
-                            if l.intersects(obstacle):
-                                intersect = True
-                                break
 
-                        if not intersect:
-                            edges.append(n[1][0])
-                            uf.union(sampled_pt_id, neighbor_id)
-                            num_connections += 1
+                        # added fpr evaluating the lazy approach
+                        edges.append(n[1][0])
+                        uf.union(sampled_pt_id, neighbor_id)
+
+                        # no need to do this when using the lazy approach
+                        # intersect = False
+                        # for obstacle in obstacles:
+                        #     if l.intersects(obstacle):
+                        #         intersect = True
+                        #         break
+                        #
+                        # if not intersect:
+                        #     edges.append(n[1][0])
+                        #     uf.union(sampled_pt_id, neighbor_id)
+                        #     num_connections += 1
 
                 elif t_out < t:
                     vel = dist_2d / (t - t_out)
                     if v_min <= vel < v_max:
                         l = LineString([[x, y], [x_out, y_out]])
-                        intersect = False
-                        for obstacle in obstacles:
-                            if l.intersects(obstacle):
-                                intersect = True
-                                break
 
-                        if not intersect:
-                            roadmap[n[1][0]].append(len(roadmap))
-                            uf.union(sampled_pt_id, neighbor_id)
-                            num_connections += 1
+                        # added to evaluate the lazy approach
+                        roadmap[n[1][0]].append(len(roadmap))
+                        uf.union(sampled_pt_id, neighbor_id)
+
+                        # no need to do this when using the lazy approach/
+                        # intersect = False
+                        # for obstacle in obstacles:
+                        #     if l.intersects(obstacle):
+                        #         intersect = True
+                        #         break
+                        #
+                        # if not intersect:
+                        #     roadmap[n[1][0]].append(len(roadmap))
+                        #     uf.union(sampled_pt_id, neighbor_id)
+                        #     num_connections += 1
 
             tree.add(node.points[0][0], node.points[0][1])
             roadmap[len(vertices)] = edges
@@ -423,6 +435,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                       edge_resolution=None, use_discretised_cost=True, ucb_path=True, num_goal_pts=20,
                       use_obstacle_cost=True, obstacles=[], obstacle_pot=1.0, plt2d=None, plt_dij=None):
 
+    path_found = False
     print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
     openset[0] = start
@@ -482,6 +495,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
             goal.points[0][1][1] = current.points[0][1][1]
             goal.points[0][0][2] = current.points[0][0][2]
             goal.points[0][1][0] = current.points[0][1][0]
+            path_found = True
             break
 
         # Remove the item from the open set
@@ -527,15 +541,17 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
     pind = goal.points[0][1][2]
     path_cost = goal.points[0][1][1]
+    path_indices = [goal.points[0][1][0]]
     while pind != -1:
         n = closedset[pind]
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
         cost_array.append(n.points[0][1][1])
+        path_indices.append(n.points[0][1][0])
         pind = n.points[0][1][2]
 
-    return rx, ry, rt, path_cost, cost_array
+    return rx, ry, rt, path_cost, cost_array, path_indices, path_found
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
@@ -593,13 +609,25 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
                                                      uniform_min=uniform_min,
                                                      uniform_max_t=uniform_max_t, plt_nodes=plt_nodes,
                                                      plt_fraction=plt_fraction)
-
-    rx, ry, rt, path_cost, cost_array = dijkstra_planning(
-                                              start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
-                                              guiding_paths=guiding_paths, edge_resolution=edge_reso,
-                                              use_obstacle_cost=use_obstacle_cost, obstacles=obstacles,
-                                              obstacle_pot=obstacle_pot, use_discretised_cost=use_discretised_cost,
-                                              plt2d=plt2d, plt_dij=plt_dij, num_goal_pts=num_goal_pts)
+    collision_free_path = False
+    path_found = True
+    while not collision_free_path and path_found:
+        rx, ry, rt, path_cost, cost_array, path_indices, path_found = dijkstra_planning(start, goal, roadmap, vertices,
+                                                                                        guiding_path_weights
+                                                                                        =guiding_path_weights,
+                                                                                        guiding_paths=guiding_paths,
+                                                                                        edge_resolution=edge_reso,
+                                                                                        use_obstacle_cost=
+                                                                                        use_obstacle_cost,
+                                                                                        obstacles=obstacles,
+                                                                                        obstacle_pot=obstacle_pot,
+                                                                                        use_discretised_cost=
+                                                                                        use_discretised_cost,
+                                                                                        plt2d=plt2d, plt_dij=plt_dij,
+                                                                                        num_goal_pts=num_goal_pts)
+        if path_found:
+            is_free, roadmap = check_path(rx, ry, obstacles, roadmap, path_indices)
+            collision_free_path = is_free
 
     return rx, ry, rt, path_cost, cost_array
 
@@ -614,5 +642,31 @@ def plot_road_map(roadmap, vertices, plt_roadmap):
                               length_includes_head=True, head_width=.01)
 
 
+def check_path(path_x, path_y, obstacles, roadmap, path_indices):
 
+    print("check path called..")
+    is_free_path = True
+    for i in range(0, len(path_x) - 1):
+        l = LineString([[path_x[i+1], path_y[i+1]], [path_x[i], path_y[i]]])
 
+        # no need to do this when using the lazy approach
+        intersect = False
+        for obstacle in obstacles:
+            if l.intersects(obstacle):
+                intersect = True
+                is_free_path = False
+                break
+
+        if intersect:
+            source_node = path_indices[i + 1]
+
+            # see if this requires deepcopy
+            edges = roadmap[source_node]
+
+            # remove the outgoing colling edge
+            edges.remove(path_indices[i])
+
+    if not is_free_path:
+        print("path found by dijkstra is not collision free will replan")
+
+    return is_free_path, roadmap
