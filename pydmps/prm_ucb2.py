@@ -123,6 +123,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     print("start and goal added to the Kdtree..")
 
     vertices = [start, goal]
+
     roadmap = {0: [], 1: []}
 
     print("uniform min: ", (uniform_min * dmp_x_min, uniform_min * dmp_y_min))
@@ -305,7 +306,9 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
                         # added fpr evaluating the lazy approach
                         if lazy_collision_check:
-                            edges.append(n[1][0])
+
+                            # in lazy collision check we will resuse the cost calculated during dijkstra
+                            edges.append([n[1][0], False, math.inf])
                             uf.union(sampled_pt_id, neighbor_id)
 
                         else:
@@ -330,7 +333,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
                         # added to evaluate the lazy approach
                         if lazy_collision_check:
-                            roadmap[n[1][0]].append(len(roadmap))
+                            roadmap[n[1][0]].append([len(roadmap), False, math.inf])
                             uf.union(sampled_pt_id, neighbor_id)
 
                         else:
@@ -453,7 +456,8 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
 def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guiding_path_weights=None,
                       edge_resolution=None, use_discretised_cost=True, ucb_path=True, num_goal_pts=20,
-                      use_obstacle_cost=True, obstacles=[], obstacle_pot=1.0, plt2d=None):
+                      use_obstacle_cost=True, obstacles=[], obstacle_pot=1.0, plt2d=None, lazy_collision_check=
+                      True):
 
     path_found = False
     print("calling dijkstra's planning")
@@ -524,26 +528,35 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
         closedset[c_id] = current
 
         for i in range(len(road_map[c_id])):
-            n_id = road_map[c_id][i]
+            if lazy_collision_check:
+                n_id = road_map[c_id][i][0]
+
+            else:
+                n_id = road_map[c_id][i]
 
             node = deepcopy(vertices[n_id])
             if n_id in closedset:
                 continue
 
             if use_discretised_cost:
-                edge_cost = calculate_discretised_edge_cost(node.points[0], vertices[c_id].points[0],
-                                                            guiding_paths, guiding_path_weights,
-                                                            edge_resolution, obstacles=obstacles,
-                                                            obstacle_pot=obstacle_pot,
-                                                            use_obstacle_cost=use_obstacle_cost)
+                if lazy_collision_check and road_map[c_id][i][1] is True:
+                    # print("edge cost already known, so using it..")
+                    node.points[0][1][1] = road_map[c_id][i][2]
 
-                node.points[0][1][1] = edge_cost + current.points[0][1][1]
-                # print("after edge cost is added cost of the node in the vertices array is: ",
-                #       vertices[n_id].points[0][1][1])
+                else:
+                    edge_cost = calculate_discretised_edge_cost(node.points[0], vertices[c_id].points[0],
+                                                                guiding_paths, guiding_path_weights,
+                                                                edge_resolution, obstacles=obstacles,
+                                                                obstacle_pot=obstacle_pot,
+                                                                use_obstacle_cost=use_obstacle_cost)
+
+                    node.points[0][1][1] = edge_cost + current.points[0][1][1]
+                    if lazy_collision_check:
+                        road_map[c_id][i][2] = edge_cost + current.points[0][1][1]
+
             else:
-                # print("discretised cost is False")
-                # node.points[0][1][1] += vertices[c_id].points[0][1][1]
-                node.points[0][1][1] += current.points[0][1][1]
+
+                print("ERROR: Use discretised cost is True")
 
             node.points[0][1][2] = c_id
 
@@ -630,19 +643,22 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
         collision_free_path = False
         path_found = True
         while not collision_free_path and path_found:
-            rx, ry, rt, path_cost, cost_array, path_indices, path_found = dijkstra_planning(start, goal, roadmap, vertices,
-                                                                                            guiding_path_weights
-                                                                                            =guiding_path_weights,
-                                                                                            guiding_paths=guiding_paths,
-                                                                                            edge_resolution=edge_reso,
-                                                                                            use_obstacle_cost=
-                                                                                            use_obstacle_cost,
-                                                                                            obstacles=obstacles,
-                                                                                            obstacle_pot=obstacle_pot,
-                                                                                            use_discretised_cost=
-                                                                                            use_discretised_cost,
-                                                                                            plt2d=plt2d,
-                                                                                            num_goal_pts=num_goal_pts)
+            rx, ry, rt, path_cost, cost_array, path_indices, path_found = dijkstra_planning(
+                start, goal, roadmap, vertices,
+                guiding_path_weights
+                =guiding_path_weights,
+                guiding_paths=guiding_paths,
+                edge_resolution=edge_reso,
+                use_obstacle_cost=
+                use_obstacle_cost,
+                obstacles=obstacles,
+                obstacle_pot=obstacle_pot,
+                use_discretised_cost=
+                use_discretised_cost,
+                plt2d=plt2d,
+                num_goal_pts=num_goal_pts,
+                lazy_collision_check=lazy_collision_check)
+
             if path_found:
                 is_free, roadmap = check_path(rx, ry, obstacles, roadmap, path_indices)
                 collision_free_path = is_free
@@ -661,7 +677,9 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
                                                                                         use_discretised_cost=
                                                                                         use_discretised_cost,
                                                                                         plt2d=plt2d,
-                                                                                        num_goal_pts=num_goal_pts)
+                                                                                        num_goal_pts=num_goal_pts,
+                                                                                        lazy_collision_check=
+                                                                                        lazy_collision_check)
     dijkstra_time = time.time() - plan_st_time
 
     print("total sampling time is: ", total_sampling_time)
@@ -683,28 +701,52 @@ def plot_road_map(roadmap, vertices, plt_roadmap):
 
 def check_path(path_x, path_y, obstacles, roadmap, path_indices):
 
+    print("=========")
     print("check path called..")
+
     is_free_path = True
     for i in range(0, len(path_x) - 1):
         l = LineString([[path_x[i+1], path_y[i+1]], [path_x[i], path_y[i]]])
+        out_edges = roadmap[path_indices[i + 1]]
 
-        # no need to do this when using the lazy approach
-        intersect = False
-        for obstacle in obstacles:
-            if l.intersects(obstacle):
-                intersect = True
-                is_free_path = False
-                break
+        for k in range(0, len(out_edges)):
+            tup = out_edges[k]
+            # print("tup is: ", tup)
+            if tup[0] == path_indices[i]:
+                # print("found the edge with id: ", path_indices[i])
+                if tup[1] is False:
+                    # no need to do this when using the lazy approach
+                    intersect = False
+                    for obstacle in obstacles:
+                        if l.intersects(obstacle):
+                            intersect = True
+                            is_free_path = False
+                            break
 
-        if intersect:
-            source_node = path_indices[i + 1]
+                    if intersect:
+                        print("found an edge that intersects...")
+                        source_node = path_indices[i + 1]
 
-            # see if this requires deepcopy
-            edges = roadmap[source_node]
+                        # see if this requires deepcopy
+                        edges = roadmap[source_node]
 
-            # remove the outgoing colling edge
-            edges.remove(path_indices[i])
-            break
+                        # print("length of the outgoing edges array before deletion: ", len())
+                        # remove the outgoing colling edge
+                        for s in range(0, len(edges)):
+                            ind = edges[s]
+                            if ind[0] == path_indices[i]:
+                                del edges[s]
+                                return is_free_path, roadmap
+
+                    else:
+                        print("edge status before ammending is: ", roadmap[path_indices[i+1]][k][1])
+                        tup[1] = True
+                        print("edge status after ammending is: ", roadmap[path_indices[i + 1]][k][1])
+
+                    print("the edge is collision free")
+
+                # else:
+                #     print("edge has been previously checked and is collision free")
 
     if not is_free_path:
         print("path found by dijkstra is not collision free will replan")
