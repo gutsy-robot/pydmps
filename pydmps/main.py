@@ -6,14 +6,14 @@ from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_n
 from dmp_discrete import DMPs_discrete
 import os
 from kdtree import KDTree
-from statistics import mean
+from statistics import mean, stdev
 import json
 import scipy.interpolate
 import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "3arms/ucb_6000_4obst_temp3_obstacle_cost/"
+main_dir = "test_new_additions_lazy_one_obstacle/"
 try:
     os.mkdir(main_dir)
 
@@ -40,7 +40,7 @@ path_y = scaled_y
 
 edge_resolution_factor = 2.0
 neighbor_radius_factor = 10.0
-use_obstacle_cost = True
+use_obstacle_cost = False
 use_ucb = True
 num_goal_pts = 50
 uniform_only = False
@@ -50,7 +50,12 @@ num_points = 1000
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
-reward_weights = {'connectivity': 2.0, 'increemental': 1.0}
+incremental_reward_weight = 1.0
+connectivity_reward_weight = 1.0
+lazy_collision_check = True
+new_scc_reward = 1.0
+scc_connect_reward = 1.5
+
 use_discretised_cost = True
 dmp_normal_cov = 0.04
 uniform_max = 1.2
@@ -71,12 +76,16 @@ inputs = {
     'plot_sampled':  plot_sampled,
     'plot_roadmap': plot_roadmap,
     'obstacle_pot': obstacle_pot,
-    'reward_weights': reward_weights,
-    'use_discretised_cost': True,
+    'incremental_reward_weight': incremental_reward_weight,
+    'connectivity_reward_weight' : connectivity_reward_weight,
+    'use_discretised_cost': use_discretised_cost,
     'dmp_normal_cov': dmp_normal_cov,
     'uniform_max': uniform_max,
     'uniform_min': uniform_min,
-    'uniform_max_t': uniform_max_t
+    'uniform_max_t': uniform_max_t,
+    'scc_connect_reward' : scc_connect_reward,
+    'new_scc_reward' : new_scc_reward,
+    'lazy_collision_check' : lazy_collision_check
 }
 
 with open(main_dir + 'inputs.json', 'w') as fp:
@@ -124,11 +133,18 @@ coords5 = [(90.0 * 0.01, 20.0 * 0.01), (90.0 * 0.01, 40.0 * 0.01), (150.0 * 0.01
           (150.0 * 0.01, 20.0 * 0.01)]
 poly5 = Polygon(coords4)
 
-obstacles = [poly1, poly2, poly3, poly4]
+obstacles = [poly1]
 path_costs = []
 
-for i in range(0, 20):
+edge_collision_check_time_total = []
+reward_calc_time_total = []
+sampling_time_total = []
+dijkstra_time_total = []
 
+num_runs = 3
+
+for i in range(0, num_runs):
+    print("starting run number: ", i)
     data_path = main_dir + str(i) + "/"
 
     try:
@@ -208,9 +224,6 @@ for i in range(0, 20):
     plt_dij.scatter(gx, gy)
     plt_dij.annotate("new_fin", (gx, gy))
 
-    # if plot_roadmap:
-    #     plt_roadmap.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
-
     plt2d.plot(sx, sy, "xr")
     plt2d.plot(gx, gy, "xb")
     plt2d.grid(True)
@@ -266,22 +279,25 @@ for i in range(0, 20):
 
     dmp_time_kdtree = KDTree(np.vstack((dmp_time_para[:, 0], dmp_time_para[:, 1], dmp_time_para[:, 2])).T)
 
-    rx, ry, rt, path_cost, cost_array = PRM_planning(
-                                         sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
-                                         dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
-                                         reward_weights=reward_weights,
-                                         use_ucb=use_ucb, uniform_only=uniform_only, normal_only=normal_only,
-                                         edge_resolution_factor=edge_resolution_factor,
-                                         use_obstacle_cost=use_obstacle_cost,
-                                         neighbor_radius_factor=neighbor_radius_factor, num_goal_pts=num_goal_pts,
-                                         dynamic_radius=dynamic_radius,
-                                         num_points=num_points, obstacle_pot=obstacle_pot,
-                                         plot_sampled=plot_sampled, plot_roadmap=plot_roadmap,
-                                         use_discretised_cost=use_discretised_cost, dmp_normal_cov=dmp_normal_cov,
-                                         plt2d=plt2d, plt_mean_reward=plt_mean_reward, plt_ucb=plt_ucb,
-                                         plt_connected=plt_connected, plt_roadmap=plt_roadmap, uniform_max=uniform_max,
-                                         uniform_min=uniform_min, uniform_max_t=uniform_max_t, plt_dij=plt_dij,
-                                         plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction)
+    rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time = \
+        PRM_planning(
+                     sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
+                     dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
+                     incremental_reward_weight=incremental_reward_weight,
+                     connectivity_reward_weight=connectivity_reward_weight,
+                     use_ucb=use_ucb, uniform_only=uniform_only, normal_only=normal_only,
+                     edge_resolution_factor=edge_resolution_factor,
+                     use_obstacle_cost=use_obstacle_cost,
+                     neighbor_radius_factor=neighbor_radius_factor, num_goal_pts=num_goal_pts,
+                     dynamic_radius=dynamic_radius,
+                     num_points=num_points, obstacle_pot=obstacle_pot,
+                     plot_sampled=plot_sampled, plot_roadmap=plot_roadmap,
+                     use_discretised_cost=use_discretised_cost, dmp_normal_cov=dmp_normal_cov,
+                     plt2d=plt2d, plt_mean_reward=plt_mean_reward, plt_ucb=plt_ucb,
+                     plt_connected=plt_connected, plt_roadmap=plt_roadmap, uniform_max=uniform_max,
+                     uniform_min=uniform_min, uniform_max_t=uniform_max_t, plt_dij=plt_dij,
+                     plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction, lazy_collision_check=lazy_collision_check)
+
     print("end time is: ", rt[0])
     print("path cost is: ", path_cost)
     path_costs.append(path_cost)
@@ -294,6 +310,14 @@ for i in range(0, 20):
     rt = np.array([rt])
 
     path_length = 0.0
+
+    total_edge_collision_time = sum(edge_check_time_sampling)
+    total_reward_calc_time = sum(reward_calc_time)
+
+    reward_calc_time_total.append(total_reward_calc_time)
+    edge_collision_check_time_total.append(total_edge_collision_time)
+    sampling_time_total.append(total_sampling_time)
+    dijkstra_time_total.append(dijkstra_time)
 
     for j in range(0, len(rx)):
         if j < len(rx) - 1:
@@ -311,10 +335,7 @@ for i in range(0, 20):
     plt2d.legend()
     plt_dij.plot(rx, ry, color='k', label='ucb path1')
     plt_dij.legend()
-    # plt_fraction.legend()
-    # plt_connected.legend()
 
-    # print("average obstacle reward is: ", mean(obstacle_rewards))
     title = "path cost: " + str(path_cost) + "__path_nodes: " + str(num_nodes_path) + "__g_time: " + "\n" + \
             str(goal_time) + "__run: " + str((i + 1)) + "__path_length: " + str(path_length)
 
@@ -339,7 +360,19 @@ for i in range(0, 20):
 
 print("path cost is: ", mean(path_costs))
 print("path cost array is: ", path_costs)
-output = {'mean_cost': mean(path_costs)}
+
+output = {
+    'num_runs': num_runs, 'mean_cost': mean(path_costs),
+    'path_cost_dev': stdev(path_costs),
+    'mean_sampling_time': mean(sampling_time_total),
+    'sampling_time_dev': stdev(sampling_time_total),
+    'mean_dij_time': mean(dijkstra_time_total),
+    'dij_time_dev' : stdev(dijkstra_time_total),
+    'mean_edge_collision_time': mean(edge_collision_check_time_total),
+    'edge_collision_time_dev': stdev(edge_collision_check_time_total),
+    'mean_state_reward_time': mean(reward_calc_time_total),
+    'state_reward_time_dev': stdev(reward_calc_time_total)}
+
 with open(main_dir + 'outputs.json', 'w') as fp:
-    json.dump(output, fp)
+    json.dump(output, fp, indent=4)
 
