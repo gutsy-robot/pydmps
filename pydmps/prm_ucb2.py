@@ -206,12 +206,12 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
         elif arm == 1:
             k = random.randint(0, len(dmp_time) - 1)
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov/ 10)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov)
             times_arm2 += 1
 
         elif arm == 2:
             k = random.randint(0, len(dmp_time) - 1)
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 100)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 4)
             times_arm3 += 1
 
         if use_ucb:
@@ -262,14 +262,15 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             if dynamic_radius is not True:
                 neighbors = tree.neighbors((x, y, t), neighbor_radius)
             else:
+                # print("dynamic radius is true")
                 k = len(vertices) - num_goal_pts - 1
-                print("value of k is: ", k)
+                # print("value of k is: ", k)
                 if k == 0 or k == 1:
                     r = neighbor_radius
-                    print("neighbor radius is: ", neighbor_radius)
+                    # print("neighbor radius is: ", neighbor_radius)
                 else:
                     r = neighbor_radius * math.pow(math.log(k)/k, (1 / 3))
-                    print("neighbor radius is: ", r)
+                    # print("neighbor radius is: ", r)
 
                 neighbors = tree.neighbors((x, y, t), r)
 
@@ -308,7 +309,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                         if lazy_collision_check:
 
                             # in lazy collision check we will resuse the cost calculated during dijkstra
-                            edges.append([n[1][0], False, math.inf])
+                            edges.append([n[1][0], False, math.inf, vel])
                             uf.union(sampled_pt_id, neighbor_id)
 
                         else:
@@ -322,7 +323,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                     break
 
                             if not intersect:
-                                edges.append(n[1][0])
+                                edges.append([n[1][0], vel])
                                 uf.union(sampled_pt_id, neighbor_id)
                                 num_connections += 1
 
@@ -333,7 +334,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
                         # added to evaluate the lazy approach
                         if lazy_collision_check:
-                            roadmap[n[1][0]].append([len(roadmap), False, math.inf])
+                            roadmap[n[1][0]].append([len(roadmap), False, math.inf, vel])
                             uf.union(sampled_pt_id, neighbor_id)
 
                         else:
@@ -347,7 +348,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                     break
 
                             if not intersect:
-                                roadmap[n[1][0]].append(len(roadmap))
+                                roadmap[n[1][0]].append([len(roadmap), vel])
                                 uf.union(sampled_pt_id, neighbor_id)
                                 num_connections += 1
 
@@ -532,7 +533,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                 n_id = road_map[c_id][i][0]
 
             else:
-                n_id = road_map[c_id][i]
+                n_id = road_map[c_id][i][0]
 
             node = deepcopy(vertices[n_id])
             if n_id in closedset:
@@ -556,7 +557,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
 
             else:
 
-                print("ERROR: Use discretised cost is True")
+                print("[ERROR]: Set discretised cost is True")
 
             node.points[0][1][2] = c_id
 
@@ -565,7 +566,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                 if openset[n_id].points[0][1][1] > node.points[0][1][1]:
 
                     openset[n_id].points[0][1][1] = node.points[0][1][1]
-                    openset[n_id].points[0][1][2] = c_id
+                    openset[n_id].points[0][1][2] = node.points[0][1][2]
             else:
                 openset[n_id] = node
 
@@ -575,16 +576,22 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
     pind = goal.points[0][1][2]
     path_cost = goal.points[0][1][1]
     path_indices = [goal.points[0][1][0]]
+    velocities = []
+    print("Giving out final path from dijkstra's...")
     while pind != -1:
         n = closedset[pind]
+        for ed in road_map[pind]:
+            if ed[0] == path_indices[-1]:
+                velocities.append(ed[1])
+
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
         cost_array.append(n.points[0][1][1])
         path_indices.append(n.points[0][1][0])
         pind = n.points[0][1][2]
-
-    return rx, ry, rt, path_cost, cost_array, path_indices, path_found
+    velocities.append(0.0)
+    return rx, ry, rt, path_cost, cost_array, path_indices, path_found, velocities
 
 
 def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=None, guiding_path_weights=[1.0],
@@ -643,7 +650,7 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
         collision_free_path = False
         path_found = True
         while not collision_free_path and path_found:
-            rx, ry, rt, path_cost, cost_array, path_indices, path_found = dijkstra_planning(
+            rx, ry, rt, path_cost, cost_array, path_indices, path_found, velocities = dijkstra_planning(
                 start, goal, roadmap, vertices,
                 guiding_path_weights
                 =guiding_path_weights,
@@ -665,28 +672,20 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
 
     else:
         plan_st_time = time.time()
-        rx, ry, rt, path_cost, cost_array, path_indices, path_found = dijkstra_planning(start, goal, roadmap, vertices,
-                                                                                        guiding_path_weights
-                                                                                        =guiding_path_weights,
-                                                                                        guiding_paths=guiding_paths,
-                                                                                        edge_resolution=edge_reso,
-                                                                                        use_obstacle_cost=
-                                                                                        use_obstacle_cost,
-                                                                                        obstacles=obstacles,
-                                                                                        obstacle_pot=obstacle_pot,
-                                                                                        use_discretised_cost=
-                                                                                        use_discretised_cost,
-                                                                                        plt2d=plt2d,
-                                                                                        num_goal_pts=num_goal_pts,
-                                                                                        lazy_collision_check=
-                                                                                        lazy_collision_check)
+        rx, ry, rt, path_cost, cost_array, path_indices, path_found,\
+            velocities = dijkstra_planning(start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                                           guiding_paths=guiding_paths, edge_resolution=edge_reso, use_obstacle_cost=
+                                           use_obstacle_cost, obstacles=obstacles, obstacle_pot=obstacle_pot,
+                                           use_discretised_cost=use_discretised_cost, plt2d=plt2d, num_goal_pts=
+                                           num_goal_pts, lazy_collision_check=lazy_collision_check)
+
     dijkstra_time = time.time() - plan_st_time
 
     print("total sampling time is: ", total_sampling_time)
     print("total time taken by dijkstra's is: ", dijkstra_time)
 
     return rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, \
-           dijkstra_time
+           dijkstra_time, velocities, v_max
 
 
 def plot_road_map(roadmap, vertices, plt_roadmap):

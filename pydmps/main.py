@@ -13,7 +13,7 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "test_new_additions_lazy_one_obstacle/"
+main_dir = "vel_check/normal_1000_no_obs/"
 try:
     os.mkdir(main_dir)
 
@@ -41,18 +41,18 @@ path_y = scaled_y
 edge_resolution_factor = 2.0
 neighbor_radius_factor = 10.0
 use_obstacle_cost = False
-use_ucb = True
+use_ucb = False
 num_goal_pts = 50
 uniform_only = False
-normal_only = False
+normal_only = True
 dynamic_radius = False
 num_points = 1000
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
 incremental_reward_weight = 1.0
-connectivity_reward_weight = 1.0
-lazy_collision_check = True
+connectivity_reward_weight = 2.0
+lazy_collision_check = False
 new_scc_reward = 1.0
 scc_connect_reward = 1.5
 
@@ -97,9 +97,9 @@ sy = 10.0 * 0.01
 gx = 75.0 * 0.01
 gy = 70.0 * 0.01
 
-# coords = [(50.0 * 0.01, 30.0 * 0.01), (50.0 * 0.01, 40.0 * 0.01), (60.0 * 0.01, 40.0 * 0.01),
-#           (60.0 * 0.01, 30.0 * 0.01)]
-# poly1 = Polygon(coords)
+coords = [(50.0 * 0.01, 30.0 * 0.01), (50.0 * 0.01, 40.0 * 0.01), (80.0 * 0.01, 40.0 * 0.01),
+          (80.0 * 0.01, 30.0 * 0.01)]
+poly1 = Polygon(coords)
 #
 # coords2 = [(25.0 * 0.01, 15.0 * 0.01), (25.0 * 0.01, 25.0 * 0.01), (35.0 * 0.01, 25.0 * 0.01),
 #            (35.0 * 0.01, 15.0 * 0.01)]
@@ -113,27 +113,27 @@ gy = 70.0 * 0.01
 #           (60.0 * 0.01, 50.0 * 0.01)]
 # poly4 = Polygon(coords4)
 
-coords = [(50.0 * 0.01, 30.0 * 0.01), (50.0 * 0.01, 45.0 * 0.01), (60.0 * 0.01, 45.0 * 0.01),
-          (60.0 * 0.01, 30.0 * 0.01)]
-poly1 = Polygon(coords)
+# coords = [(50.0 * 0.01, 30.0 * 0.01), (50.0 * 0.01, 45.0 * 0.01), (60.0 * 0.01, 45.0 * 0.01),
+#           (60.0 * 0.01, 30.0 * 0.01)]
+# poly1 = Polygon(coords)
 
-coords2 = [(25.0 * 0.01, 25.0 * 0.01), (25.0 * 0.01, 40.0 * 0.01), (35.0 * 0.01, 40.0 * 0.01),
-           (35.0 * 0.01, 25.0 * 0.01)]
+coords2 = [(25.0 * 0.01, 25.0 * 0.01), (25.0 * 0.01, 30.0 * 0.01), (55.0 * 0.01, 30.0 * 0.01),
+           (55.0 * 0.01, 25.0 * 0.01)]
 poly2 = Polygon(coords2)
 
 coords3 = [(70.0 * 0.01, 30.0 * 0.01), (70.0 * 0.01, 40.0 * 0.01), (150.0 * 0.01, 40.0 * 0.01),
           (150.0 * 0.01, 30.0 * 0.01)]
 poly3 = Polygon(coords3)
 
-coords4 = [(90.0 * 0.01, 50.0 * 0.01), (90.0 * 0.01, 70.0 * 0.01), (100.0 * 0.01, 70.0 * 0.01),
-          (100.0 * 0.01, 50.0 * 0.01)]
+coords4 = [(90.0 * 0.01, 50.0 * 0.01), (90.0 * 0.01, 70.0 * 0.01), (140.0 * 0.01, 70.0 * 0.01),
+          (140.0 * 0.01, 50.0 * 0.01)]
 poly4 = Polygon(coords4)
 
 coords5 = [(90.0 * 0.01, 20.0 * 0.01), (90.0 * 0.01, 40.0 * 0.01), (150.0 * 0.01, 40.0 * 0.01),
           (150.0 * 0.01, 20.0 * 0.01)]
-poly5 = Polygon(coords4)
+poly5 = Polygon(coords5)
 
-obstacles = [poly1]
+obstacles = []
 path_costs = []
 
 edge_collision_check_time_total = []
@@ -141,7 +141,7 @@ reward_calc_time_total = []
 sampling_time_total = []
 dijkstra_time_total = []
 
-num_runs = 3
+num_runs = 10
 
 for i in range(0, num_runs):
     print("starting run number: ", i)
@@ -182,6 +182,9 @@ for i in range(0, num_runs):
 
     fig_fraction_plot, plt_fraction = plt.subplots()
     fig_fraction_plot.suptitle('Arm Fraction', fontsize=24)
+
+    fig_velocity= plt.figure()
+    ax_velocity = fig_velocity.add_subplot(111, projection='3d')
 
     if plot_roadmap:
         fig7, plt_roadmap = plt.subplots()
@@ -255,7 +258,14 @@ for i in range(0, num_runs):
     y_track_nc_x = np.array(y_track_nc[:, 0])
     y_track_nc_y = np.array(y_track_nc[:, 1])
 
+    vel = []
+    for v in dy_track_nc:
+        vel.append(math.sqrt(v[0] ** 2 + v[1] ** 2))
+
+    vel = np.array(vel)
+
     ax.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time, s=1.0)
+    ax_velocity.scatter(y_track_nc_x, y_track_nc_y, np.array([vel]), s=1.0)
     ax_3Dnodes.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
 
     plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y, label='dmp')
@@ -279,7 +289,8 @@ for i in range(0, num_runs):
 
     dmp_time_kdtree = KDTree(np.vstack((dmp_time_para[:, 0], dmp_time_para[:, 1], dmp_time_para[:, 2])).T)
 
-    rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time = \
+    rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time, \
+        velocities, v_max = \
         PRM_planning(
                      sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
                      dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
@@ -298,8 +309,44 @@ for i in range(0, num_runs):
                      uniform_min=uniform_min, uniform_max_t=uniform_max_t, plt_dij=plt_dij,
                      plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction, lazy_collision_check=lazy_collision_check)
 
+    print("v_max is: ", v_max)
     print("end time is: ", rt[0])
     print("path cost is: ", path_cost)
+    print("velocity array is: ", velocities)
+    ax_velocity.scatter(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]))
+    ax_velocity.plot_wireframe(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]), '--', linewidth=1,
+                               label='v_max')
+
+    profile_x = []
+    profile_y = []
+    profile_vel = []
+    for m in range(0, len(velocities)):
+        if m < len(velocities) - 1:
+            profile_x.append(rx[m])
+            profile_x.append(rx[m + 1])
+            profile_y.append(ry[m])
+            profile_y.append(ry[m+1])
+            profile_vel.append(velocities[m])
+            profile_vel.append((velocities[m]))
+
+            # ax_velocity.scatter(np.array([rx[m], rx[m+1]]), np.array([ry[m], ry[m+1]]),
+            #                     np.array([[velocities[m], velocities[m]]]))
+            # ax_velocity.plot_wireframe(np.array([rx[m], rx[m+1]]), np.array([ry[m], ry[m+1]]),
+            #                            np.array([[velocities[m], velocities[m]]]), '--', linewidth=1)
+        else:
+            profile_x.append(rx[m])
+            profile_y.append(ry[m])
+            profile_vel.append(velocities[m])
+
+            # ax_velocity.scatter(np.array(`[rx[m]]), np.array([ry[m]]),
+            #                     np.array([[velocities[m]]]))
+            # ax_velocity.plot_wireframe(np.array([rx[m]]), np.array([ry[m]]),
+            #                            np.array([[velocities[m]]]),  '--', linewidth=1)
+
+    ax_velocity.plot_wireframe(np.array(profile_x), np.array(profile_y), np.array([profile_vel]),  '--', linewidth=1,
+                               color='k', label='path_vel_profile')
+    ax_velocity.scatter(np.array(profile_x), np.array(profile_y), np.array([profile_vel]))
+    ax_velocity.legend()
     path_costs.append(path_cost)
     num_nodes_path = len(rx)
 
@@ -336,8 +383,8 @@ for i in range(0, num_runs):
     plt_dij.plot(rx, ry, color='k', label='ucb path1')
     plt_dij.legend()
 
-    title = "path cost: " + str(path_cost) + "__path_nodes: " + str(num_nodes_path) + "__g_time: " + "\n" + \
-            str(goal_time) + "__run: " + str((i + 1)) + "__path_length: " + str(path_length)
+    title = "path cost: " + str(path_cost) + "  path_nodes: " + str(num_nodes_path) + "  g_time: " + "\n" + \
+            str(goal_time) + "  run: " + str((i + 1)) + "  path_length: " + str(path_length)
 
     if obstacles is not None:
         for obstacle in obstacles:
@@ -356,7 +403,10 @@ for i in range(0, num_runs):
     fig_3Dcost.savefig(data_path + "plt_cost.png")
     fig_3Dnodes.suptitle('nodes', fontsize=24)
     fig_3Dnodes.savefig(data_path + "plt_3Dnodes.png")
+    fig_velocity.suptitle('Path velocity', fontsize=24)
+    fig_velocity.savefig(data_path + "plt_velocity.png")
     fig_fraction_plot.savefig(data_path + "plt_fraction.png")
+    plt.clf()
 
 print("path cost is: ", mean(path_costs))
 print("path cost array is: ", path_costs)
