@@ -187,7 +187,15 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     first_path_found = False
 
     while len(vertices) < num_points:
-        # if runs_ucb != 0:
+        # if len(vertices) == 160:
+        #     temp = [v.points[0] for v in vertices[1: num_goal_pts + 1]]
+        #     for v in temp:
+        #         if v[0][0] != goal.points[0][0][0] and v[0][1] != goal.points[0][0][1]:
+        #             print("found a goal node when the one of the goal pts doesn't have the same x and y "
+        #                   "as goal. Len of ver"
+        #                   "is: ", len(vertices))
+        #             print("node id is: ", v[1][0])
+        #     # if runs_ucb != 0:
 
         if ucb is not None:
             arm, ucb_values = ucb.select_arm()
@@ -332,7 +340,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                     break
 
                             if not intersect:
-                                edges.append([n[1][0], vel])
+                                edges.append([n[1][0], False, math.inf, vel])
                                 uf.union(sampled_pt_id, neighbor_id)
                                 num_connections += 1
 
@@ -357,7 +365,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                     break
 
                             if not intersect:
-                                roadmap[n[1][0]].append([len(roadmap), vel])
+                                roadmap[n[1][0]].append([len(roadmap), False, math.inf, vel])
                                 uf.union(sampled_pt_id, neighbor_id)
                                 num_connections += 1
 
@@ -389,10 +397,13 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             # change in cost of optimal path reward
             st_uf_id = uf.find(0)
             goal_uf_id = uf.find(1)
-
+            # roadmap_copy = deepcopy(roadmap)
+            vertices_copy = deepcopy(vertices)
+            start_copy = deepcopy(start)
+            goal_copy = deepcopy(goal)
             if st_uf_id == goal_uf_id:
-                rx, ry, rt, path_cost, cost_array, path_indices, path_found, velocities = dijkstra_planning(
-                    start, goal, roadmap, vertices, guiding_path_weights=guiding_path_weights,
+                rx_, ry_, rt_, path_cost, cost_array_, path_indices_, path_found, velocities_ = dijkstra_planning(
+                    start_copy, goal_copy, roadmap, vertices_copy, guiding_path_weights=guiding_path_weights,
                     guiding_paths=guiding_paths, edge_resolution=edge_resolution,
                     use_obstacle_cost=use_obstacle_cost, obstacles=obstacles,
                     obstacle_pot=obstacle_pot, use_discretised_cost=True, plt2d=None,
@@ -479,8 +490,9 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         plt_fraction.legend(arms, loc=2)
 
     total_process_time = time.time() - call_st_time
-    return vertices, roadmap, ucb, edge_resolution, edge_collision_check_times, st_reward_calc_times, \
-           total_process_time, path_cost_array
+
+    return vertices, roadmap, ucb, edge_resolution, edge_collision_check_times, \
+        st_reward_calc_times, total_process_time, path_cost_array
 
 
 def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guiding_path_weights=None,
@@ -568,9 +580,9 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                 continue
 
             if use_discretised_cost:
-                if lazy_collision_check and road_map[c_id][i][1] is True:
+                if road_map[c_id][i][1] is True:
                     # print("edge cost already known, so using it..")
-                    node.points[0][1][1] = road_map[c_id][i][2]
+                    node.points[0][1][1] = road_map[c_id][i][2] + current.points[0][1][1]
 
                 else:
                     edge_cost = calculate_discretised_edge_cost(node.points[0], vertices[c_id].points[0],
@@ -580,8 +592,9 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                                                                 use_obstacle_cost=use_obstacle_cost)
 
                     node.points[0][1][1] = edge_cost + current.points[0][1][1]
-                    if lazy_collision_check:
-                        road_map[c_id][i][2] = edge_cost + current.points[0][1][1]
+                    # if lazy_collision_check:
+                    road_map[c_id][i][2] = edge_cost
+                    road_map[c_id][i][1] = True
 
             else:
 
@@ -610,7 +623,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
         n = closedset[pind]
         for ed in road_map[pind]:
             if ed[0] == path_indices[-1]:
-                velocities.append(ed[1])
+                velocities.append(ed[3])
 
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
@@ -715,7 +728,7 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
     print("total time taken by dijkstra's is: ", dijkstra_time)
 
     return rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, \
-           dijkstra_time, velocities, v_max, path_cost_array
+           dijkstra_time, velocities, v_max, path_cost_array, path_found
 
 
 def plot_road_map(roadmap, vertices, plt_roadmap):

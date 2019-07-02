@@ -14,7 +14,7 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "time_var/test_new/"
+main_dir = "time_var/debug3/"
 try:
     os.mkdir(main_dir)
 
@@ -49,7 +49,7 @@ num_goal_pts = 50
 uniform_only = False
 normal_only = True
 dynamic_radius = False
-num_points = 500
+num_points = 1000
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
@@ -253,14 +253,14 @@ for i in range(0, num_runs):
     dmp.goal[1] = gy
 
     y_track_nc, dy_track_nc, ddy_track_nc, s = dmp.rollout()
-    print("[INFO]: trajectory rolled out successfully..")
-    print("shape of y_track_nc is: ", y_track_nc.shape)
+    # print("[INFO]: trajectory rolled out successfully..")
+    # print("shape of y_track_nc is: ", y_track_nc.shape)
     y_track_nc_time = []
-    print("total time is: ", len(y_track_nc) * dmp.dt)
+    # print("total time is: ", len(y_track_nc) * dmp.dt)
     for w in range(0, len(y_track_nc)):
         y_track_nc_time.append((w + 1) * dmp.dt)
 
-    print("end time in the time array is: ", y_track_nc_time[-1])
+    # print("end time in the time array is: ", y_track_nc_time[-1])
     y_track_nc_time = np.array([y_track_nc_time])
     y_track_nc_x = np.array(y_track_nc[:, 0])
     y_track_nc_y = np.array(y_track_nc[:, 1])
@@ -297,7 +297,7 @@ for i in range(0, num_runs):
     dmp_time_kdtree = KDTree(np.vstack((dmp_time_para[:, 0], dmp_time_para[:, 1], dmp_time_para[:, 2])).T)
 
     rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time, \
-        velocities, v_max, path_cost_array = \
+        velocities, v_max, path_cost_array, path_found = \
         PRM_planning(
                      sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
                      dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
@@ -318,14 +318,16 @@ for i in range(0, num_runs):
                      dmp_normal_time_cov=dmp_normal_time_cov)
 
     plt_path_cost.plot(path_cost_array)
-    print("v_max is: ", v_max)
-    print("end time is: ", rt[0])
-    print("path cost is: ", path_cost)
-    print("velocity array is: ", velocities)
+    print("length of rx is: ", len(rx))
+    # print("v_max is: ", v_max)
+    # print("end time is: ", rt[0])
+    # print("path cost is: ", path_cost)
+    # print("velocity array is: ", velocities)
     # ax_velocity.scatter(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]))
     # ax_velocity.plot_wireframe(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]), '--', linewidth=1,
     #                           label='v_max')
-
+    if path_found:
+        print("FINALLY PATH WAS FOUND......")
     profile_x = []
     profile_y = []
     profile_vel = []
@@ -388,6 +390,7 @@ for i in range(0, num_runs):
     ax_3Dcost.plot_wireframe(rx, ry, cost_array, color='k', label='ucb')
 
     plt2d.plot(rx, ry, color='k', label='ucb path1')
+    plt2d.scatter(rx, ry, s=10.0)
     plt2d.legend()
     plt_dij.plot(rx, ry, color='k', label='ucb path1')
     plt_dij.legend()
