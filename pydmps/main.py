@@ -1,6 +1,7 @@
 from prm_ucb2 import PRM_planning
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from shapely.geometry.polygon import LinearRing, Polygon, LineString
 from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, ind_max
 from dmp_discrete import DMPs_discrete
@@ -13,12 +14,14 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "vel_check/normal_1000_no_obs/"
+main_dir = "time_var/test_new/"
 try:
     os.mkdir(main_dir)
 
+
 except:
     print("destination folder exists")
+
 
 x, y = get_trajectory("../csv/data.csv")
 scaled_x = [0.01 * 10 * i for i in x]
@@ -46,7 +49,7 @@ num_goal_pts = 50
 uniform_only = False
 normal_only = True
 dynamic_radius = False
-num_points = 1000
+num_points = 500
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
@@ -58,6 +61,7 @@ scc_connect_reward = 1.5
 
 use_discretised_cost = True
 dmp_normal_cov = 0.04
+dmp_normal_time_cov = 0.04
 uniform_max = 1.2
 uniform_min = 0.8
 # earlier this was 2.0
@@ -84,8 +88,9 @@ inputs = {
     'uniform_min': uniform_min,
     'uniform_max_t': uniform_max_t,
     'scc_connect_reward' : scc_connect_reward,
-    'new_scc_reward' : new_scc_reward,
-    'lazy_collision_check' : lazy_collision_check
+    'new_scc_reward': new_scc_reward,
+    'lazy_collision_check': lazy_collision_check,
+    'dmp_normal_time_cov': dmp_normal_time_cov
 }
 
 with open(main_dir + 'inputs.json', 'w') as fp:
@@ -157,6 +162,8 @@ for i in range(0, num_runs):
     fig, plt2d = plt.subplots()
 
     fig_dij, plt_dij = plt.subplots()
+
+    fig_path_cost, plt_path_cost = plt.subplots()
 
     fig2, plt_mean_reward = plt.subplots()
     # plt_mean_reward = fig2.add_subplot(111)
@@ -269,7 +276,7 @@ for i in range(0, num_runs):
     ax_3Dnodes.scatter(y_track_nc_x, y_track_nc_y, y_track_nc_time)
 
     plot_2d_dmp, = plt2d.plot(y_track_nc_x, y_track_nc_y, label='dmp')
-    plt2d.scatter(y_track_nc_x, y_track_nc_y, s=8.0)
+    plt2d.scatter(y_track_nc_x, y_track_nc_y, s=1.0)
 
     plt_dij.plot(y_track_nc_x, y_track_nc_y, label='dmp')
     plt_dij.scatter(y_track_nc_x, y_track_nc_y)
@@ -290,7 +297,7 @@ for i in range(0, num_runs):
     dmp_time_kdtree = KDTree(np.vstack((dmp_time_para[:, 0], dmp_time_para[:, 1], dmp_time_para[:, 2])).T)
 
     rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time, \
-        velocities, v_max = \
+        velocities, v_max, path_cost_array = \
         PRM_planning(
                      sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
                      dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
@@ -307,15 +314,17 @@ for i in range(0, num_runs):
                      plt2d=plt2d, plt_mean_reward=plt_mean_reward, plt_ucb=plt_ucb,
                      plt_connected=plt_connected, plt_roadmap=plt_roadmap, uniform_max=uniform_max,
                      uniform_min=uniform_min, uniform_max_t=uniform_max_t, plt_dij=plt_dij,
-                     plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction, lazy_collision_check=lazy_collision_check)
+                     plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction, lazy_collision_check=lazy_collision_check,
+                     dmp_normal_time_cov=dmp_normal_time_cov)
 
+    plt_path_cost.plot(path_cost_array)
     print("v_max is: ", v_max)
     print("end time is: ", rt[0])
     print("path cost is: ", path_cost)
     print("velocity array is: ", velocities)
-    ax_velocity.scatter(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]))
-    ax_velocity.plot_wireframe(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]), '--', linewidth=1,
-                               label='v_max')
+    # ax_velocity.scatter(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]))
+    # ax_velocity.plot_wireframe(np.array(rx), np.array(ry), np.array([[v_max] * len(velocities)]), '--', linewidth=1,
+    #                           label='v_max')
 
     profile_x = []
     profile_y = []
@@ -406,6 +415,10 @@ for i in range(0, num_runs):
     fig_velocity.suptitle('Path velocity', fontsize=24)
     fig_velocity.savefig(data_path + "plt_velocity.png")
     fig_fraction_plot.savefig(data_path + "plt_fraction.png")
+
+    fig_path_cost.suptitle('Path Cost', fontsize=24)
+    fig_path_cost.savefig(data_path + "plt_path_costs.png")
+
     plt.clf()
 
 print("path cost is: ", mean(path_costs))
