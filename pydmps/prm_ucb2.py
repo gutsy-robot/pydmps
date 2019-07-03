@@ -88,7 +88,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
          use_obstacle_cost=False, obstacle_pot=1.0, plot_roadmap=False, dmp_normal_cov=0.04,
          plt2d=None, plt_mean_reward=None, plt_ucb=None, plt_connected=None, plt_roadmap=None, uniform_max=1.2,
          uniform_min=0.8, uniform_max_t=1.5, plt_nodes=None, plt_fraction=None, lazy_collision_check=True,
-         dmp_time_normal_cov=0.01):
+         dmp_time_normal_cov=0.01, use_path_reduction_cost=True):
 
     call_st_time = time.time()
     st_reward_calc_times = []
@@ -163,6 +163,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
     increemental_reward = []
     connectivity_reward = []
+    path_cost_reduction_reward_array = []
 
     n_connected_components = len(vertices)
     node_number = num_goal_pts + 2
@@ -193,7 +194,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         #         if v[0][0] != goal.points[0][0][0] and v[0][1] != goal.points[0][0][1]:
         #             print("found a goal node when the one of the goal pts doesn't have the same x and y "
         #                   "as goal. Len of ver"
-        #                   "is: ", len(vertices))
+        #                   "is: ",     len(vertices))
         #             print("node id is: ", v[1][0])
         #     # if runs_ucb != 0:
 
@@ -227,8 +228,8 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         elif arm == 2:
             k = random.randint(0, len(dmp_time) - 1)
             # x, y, t = dmp_time[k][0], dmp_time[k][1], dmp_time[k][2]
-            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 50,
-                                        time_variance=dmp_time_normal_cov / 50)
+            x, y, t = sample_dmp_normal(dmp_time[k][0], dmp_time[k][1], dmp_time[k][2], variance=dmp_normal_cov / 40,
+                                        time_variance=dmp_time_normal_cov / 40)
             times_arm3 += 1
 
         if use_ucb:
@@ -247,13 +248,16 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                                                             use_obstacle_cost=use_obstacle_cost,
                                                             obstacle_pot=obstacle_pot,
                                                             state_reward_times=st_reward_calc_times)
+        if not first_path_found:
+            reward = incremental_reward_weight * inc_reward
 
-        reward = incremental_reward_weight * inc_reward
+        else:
+            reward = 0.0
 
         increemental_reward.append(reward)
 
         # ensures whether the sampled state is feasible.
-        if reward > 0:
+        if inc_reward > 0:
             if plot_sampled:
                 if arm == 0:
                     plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
@@ -373,7 +377,46 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             roadmap[len(vertices)] = edges
             vertices.append(node)
 
-            if connectivity_reward_weight > 0 and len(vertices) > 1:
+            # change in cost of optimal path reward
+            if use_path_reduction_cost:
+                path_cost_reduction_reward = 0.0
+                st_uf_id = uf.find(0)
+                goal_uf_id = uf.find(1)
+                # roadmap_copy = deepcopy(roadmap)
+                vertices_copy = deepcopy(vertices)
+                start_copy = deepcopy(start)
+                goal_copy = deepcopy(goal)
+                if st_uf_id == goal_uf_id:
+                    rx_, ry_, rt_, path_cost, cost_array_, path_indices_, path_found, velocities_ = dijkstra_planning(
+                        start_copy, goal_copy, roadmap, vertices_copy, guiding_path_weights=guiding_path_weights,
+                        guiding_paths=guiding_paths, edge_resolution=edge_resolution,
+                        use_obstacle_cost=use_obstacle_cost, obstacles=obstacles,
+                        obstacle_pot=obstacle_pot, use_discretised_cost=True, plt2d=None,
+                        num_goal_pts=num_goal_pts, lazy_collision_check=lazy_collision_check)
+                    if path_found:
+
+                        if not first_path_found:
+                            plt2d.plot(rx_, ry_, color="b", label="first feasible")
+                            first_path_found = True
+                            print("first path is found when length of vertices is: ", len(vertices))
+                        else:
+                            path_cost_reduction_reward =\
+                                math.exp(max(path_cost_array[-1] - path_cost, 0.0) / path_cost_array[-1])
+                            # reward += path_cost_reduction_reward
+
+                        path_cost_reduction_reward_array.append(path_cost_reduction_reward)
+                        path_cost_array.append(path_cost)
+
+                    else:
+                        path_cost_array.append(0.0)
+                        path_cost_reduction_reward_array.append(path_cost_reduction_reward)
+                else:
+                    path_cost_array.append(0.0)
+                    path_cost_reduction_reward_array.append(path_cost_reduction_reward)
+
+            # we stop giving connectivity rewards when we find the first feasible path.
+            con_reward = 0.0
+            if connectivity_reward_weight > 0 and not first_path_found:
                 n_connected_components_new = uf.count()
 
                 conn_comp_arr.append(n_connected_components_new)
@@ -393,26 +436,8 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                 else:
                     con_reward = 0.0
                     connectivity_reward.append(con_reward)
-
-            # change in cost of optimal path reward
-            st_uf_id = uf.find(0)
-            goal_uf_id = uf.find(1)
-            # roadmap_copy = deepcopy(roadmap)
-            vertices_copy = deepcopy(vertices)
-            start_copy = deepcopy(start)
-            goal_copy = deepcopy(goal)
-            if st_uf_id == goal_uf_id:
-                rx_, ry_, rt_, path_cost, cost_array_, path_indices_, path_found, velocities_ = dijkstra_planning(
-                    start_copy, goal_copy, roadmap, vertices_copy, guiding_path_weights=guiding_path_weights,
-                    guiding_paths=guiding_paths, edge_resolution=edge_resolution,
-                    use_obstacle_cost=use_obstacle_cost, obstacles=obstacles,
-                    obstacle_pot=obstacle_pot, use_discretised_cost=True, plt2d=None,
-                    num_goal_pts=num_goal_pts, lazy_collision_check=lazy_collision_check)
-                if path_found:
-                    path_cost_array.append(path_cost)
-                    if not first_path_found:
-                        first_path_found = True
-                        print("first path is found when length of vertices is: ", len(vertices))
+            else:
+                connectivity_reward.append(con_reward)
 
         if ucb is not None:
             ucb.update(arm, reward)
@@ -430,13 +455,6 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
     increemental_reward = np.array(increemental_reward)
     connectivity_reward = np.array(connectivity_reward)
-    print("max in the increemental reward array is: ", np.max(increemental_reward))
-    print("min in the increemental reward array is: ", np.min(increemental_reward))
-    print("mean incremental reward is: ", mean(increemental_reward))
-
-    print("max in the connectivity reward array is: ", np.max(connectivity_reward))
-    print("min in the connectivity reward array is: ", np.min(connectivity_reward))
-    print("mean connectivity reward is: ", mean(connectivity_reward))
 
     if ucb is not None:
         plt_ucb.plot(ucb1, label='uniform')
@@ -457,18 +475,13 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
         plot_road_map(roadmap, vertices, plt_roadmap)
 
     if use_ucb:
-        print("number of uniform nodes are: ", len(uniform_nodes))
-        print("number of normal nodes are: ", len(normal_nodes))
-        print('number of runs of ucb: ', runs_ucb)
         fraction_plotting_interval = int(runs_ucb / 10)
-        print("fraction plotting interval is: ", fraction_plotting_interval)
+        # print("fraction plotting interval is: ", fraction_plotting_interval)
         num_chosen_arm = []
         frac_arm1 = []
         frac_arm2 = []
         frac_arm3 = []
-        print("length of arm1_fraction_arr is: ", len(arm1_fraction_arr))
-        print("length of arm2_fraction_arr is: ", len(arm2_fraction_arr))
-        print("length of arm3_fraction_arr is: ", len(arm3_fraction_arr))
+
         for i in range(0, 10):
             ind = (i + 1) * fraction_plotting_interval - 1
             # print("ind is: ", ind)
@@ -477,8 +490,8 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
             frac_arm2.append(arm2_fraction_arr[ind])
             frac_arm3.append(arm3_fraction_arr[ind])
 
-        print("fraction of arm1 is: ", frac_arm1)
-        print("fraction of arm2 is: ", frac_arm2)
+        # print("fraction of arm1 is: ", frac_arm1)
+        # print("fraction of arm2 is: ", frac_arm2)
         plt_fraction.bar(pos, frac_arm1, bar_width, color='blue', edgecolor='black')
         plt_fraction.bar(pos + bar_width, frac_arm2, bar_width, color='red', edgecolor='black')
         plt_fraction.bar(pos + 2 * bar_width, frac_arm3, bar_width, color='green', edgecolor='black')
@@ -492,7 +505,8 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     total_process_time = time.time() - call_st_time
 
     return vertices, roadmap, ucb, edge_resolution, edge_collision_check_times, \
-        st_reward_calc_times, total_process_time, path_cost_array
+        st_reward_calc_times, total_process_time, path_cost_array, path_cost_reduction_reward_array, \
+        connectivity_reward, increemental_reward
 
 
 def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guiding_path_weights=None,
@@ -500,6 +514,7 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                       use_obstacle_cost=True, obstacles=[], obstacle_pot=1.0, plt2d=None, lazy_collision_check=
                       True):
 
+    # print("at the start of dijkstra planning cost of start node is: ", start.points[0][1][1])
     path_found = False
     # print("calling dijkstra's planning")
     openset, closedset = dict(), dict()
@@ -590,11 +605,34 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
                                                                 edge_resolution, obstacles=obstacles,
                                                                 obstacle_pot=obstacle_pot,
                                                                 use_obstacle_cost=use_obstacle_cost)
-
                     node.points[0][1][1] = edge_cost + current.points[0][1][1]
                     # if lazy_collision_check:
                     road_map[c_id][i][2] = edge_cost
                     road_map[c_id][i][1] = True
+
+                    # node_time = vertices[c_id].points[0][0][2]
+                    # g = None
+                    # for w in range(1, num_goal_pts + 1):
+                    #     if vertices[w].points[0][0][2] >= node_time:
+                    #         g = vertices[w].points[0]
+                    #
+                    # if g is not None:
+                    #     cost_to_go = calculate_discretised_edge_cost(vertices[c_id].points[0], g,
+                    #                                                  guiding_paths, guiding_path_weights,
+                    #                                                  edge_resolution, obstacles=obstacles,
+                    #                                                  obstacle_pot=obstacle_pot,
+                    #                                                  use_obstacle_cost=use_obstacle_cost)
+                    #
+                    #     node.points[0][1][1] = edge_cost + cost_to_go + current.points[0][1][1]
+                    #     # if lazy_collision_check:
+                    #     road_map[c_id][i][2] = edge_cost + cost_to_go
+                    #     road_map[c_id][i][1] = True
+                    #
+                    # else:
+                    #     node.points[0][1][1] = math.inf
+                    #     # if lazy_collision_check:
+                    #     road_map[c_id][i][2] = math.inf
+                    #     road_map[c_id][i][1] = True
 
             else:
 
@@ -621,6 +659,9 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
     # print("Giving out final path from dijkstra's...")
     while pind != -1:
         n = closedset[pind]
+        # if n == start:
+        #     print("found start nude whose cost is: ", n.points[0][1][1])
+        #     print("cost array when start was found is: ", cost_array)
         for ed in road_map[pind]:
             if ed[0] == path_indices[-1]:
                 velocities.append(ed[3])
@@ -661,8 +702,8 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
         vel.append(math.sqrt(v[0] ** 2 + v[1] ** 2))
 
     vel = np.array(vel)
-    v_max = 10000000
-    # v_max = max(vel)
+    # v_max = 10000000
+    v_max = max(vel)
     # v_min = min(vel)
     v_min = 0.0
     print("vmax is: ", v_max)
@@ -675,7 +716,7 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
         ucb = None
 
     vertices, roadmap, ucb_updated, edge_reso, edge_check_time_sampling, reward_calc_time, total_sampling_time,\
-        path_cost_array= \
+        path_cost_array, path_cost_reduction_reward_array, connectivity_reward, increemental_reward= \
         plan(start, goal, guiding_paths, obstacles, v_max, v_min, guiding_path_weights=guiding_path_weights,
              use_ucb=use_ucb, ucb=ucb, incremental_reward_weight=incremental_reward_weight,
              connectivity_reward_weight=connectivity_reward_weight,
@@ -728,7 +769,8 @@ def PRM_planning(sx, sy, gx, gy, obstacles=None, guiding_paths=None, dmp_vel=Non
     print("total time taken by dijkstra's is: ", dijkstra_time)
 
     return rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, \
-           dijkstra_time, velocities, v_max, path_cost_array, path_found
+        dijkstra_time, velocities, v_max, path_cost_array, path_found, path_cost_reduction_reward_array, \
+        connectivity_reward, increemental_reward
 
 
 def plot_road_map(roadmap, vertices, plt_roadmap):

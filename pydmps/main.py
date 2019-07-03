@@ -14,7 +14,7 @@ import math
 from mpl_toolkits.mplot3d import axes3d
 
 
-main_dir = "time_var/debug3/"
+main_dir = "path_cost_plots/3/"
 try:
     os.mkdir(main_dir)
 
@@ -41,15 +41,15 @@ for i in range(0, 80):
 path_x = scaled_x
 path_y = scaled_y
 
-edge_resolution_factor = 2.0
-neighbor_radius_factor = 10.0
+edge_resolution_factor = 1.0
+neighbor_radius_factor = 20.0
 use_obstacle_cost = False
-use_ucb = False
+use_ucb = True
 num_goal_pts = 50
 uniform_only = False
-normal_only = True
+normal_only = False
 dynamic_radius = False
-num_points = 1000
+num_points = 500
 plot_sampled = True
 plot_roadmap = False
 obstacle_pot = 0.1
@@ -138,7 +138,7 @@ coords5 = [(90.0 * 0.01, 20.0 * 0.01), (90.0 * 0.01, 40.0 * 0.01), (150.0 * 0.01
           (150.0 * 0.01, 20.0 * 0.01)]
 poly5 = Polygon(coords5)
 
-obstacles = []
+obstacles = [poly1, poly4, poly5]
 path_costs = []
 
 edge_collision_check_time_total = []
@@ -162,6 +162,8 @@ for i in range(0, num_runs):
     fig, plt2d = plt.subplots()
 
     fig_dij, plt_dij = plt.subplots()
+
+    fig_rewards, plt_rewards = plt.subplots()
 
     fig_path_cost, plt_path_cost = plt.subplots()
 
@@ -297,7 +299,8 @@ for i in range(0, num_runs):
     dmp_time_kdtree = KDTree(np.vstack((dmp_time_para[:, 0], dmp_time_para[:, 1], dmp_time_para[:, 2])).T)
 
     rx, ry, rt, path_cost, cost_array, edge_check_time_sampling, reward_calc_time, total_sampling_time, dijkstra_time, \
-        velocities, v_max, path_cost_array, path_found = \
+        velocities, v_max, path_cost_array, path_found, path_cost_reduction_reward_array, \
+        connectivity_reward, increemental_reward = \
         PRM_planning(
                      sx, sy, gx, gy, obstacles=obstacles, guiding_paths=[dmp_time_kdtree],
                      dmp_vel=dmp_dy_time_para, guiding_path_weights=[1.0],
@@ -317,6 +320,12 @@ for i in range(0, num_runs):
                      plt_nodes=ax_3Dnodes, plt_fraction=plt_fraction, lazy_collision_check=lazy_collision_check,
                      dmp_normal_time_cov=dmp_normal_time_cov)
 
+    plt_rewards.plot(connectivity_reward, label='connectivity')
+    plt_rewards.plot(increemental_reward, label='incremental')
+    plt_rewards.plot(path_cost_reduction_reward_array, label='path_cost_reduction')
+    plt_rewards.legend()
+
+    # print("final node wise cost array is: ", cost_array)
     plt_path_cost.plot(path_cost_array)
     print("length of rx is: ", len(rx))
     # print("v_max is: ", v_max)
@@ -421,6 +430,9 @@ for i in range(0, num_runs):
 
     fig_path_cost.suptitle('Path Cost', fontsize=24)
     fig_path_cost.savefig(data_path + "plt_path_costs.png")
+
+    fig_rewards.suptitle('Rewards', fontsize=24)
+    fig_rewards.savefig(data_path + "plt_rewards.png")
 
     plt.clf()
 

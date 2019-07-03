@@ -227,7 +227,7 @@ def check_collision(path_points, obstacles):
 
 def sample_dmp_normal(x_dmp, y_dmp, t_dmp, variance=0.04, time_variance=0.04):
     mean = [x_dmp, y_dmp, t_dmp]
-    cov = [[variance, 0, 0], [0, variance, 0], [0, 0, variance]]
+    cov = [[variance, 0, 0], [0, variance, 0], [0, 0, time_variance]]
     x, y, t = np.random.multivariate_normal(mean, cov, 1).T
     # print("point returned from dmp_normal: ", (x, y, t))
     return x[0], y[0], t[0]
@@ -320,6 +320,7 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
 
         cost = math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
                          (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * edge_length
+        # cost = 0.0
 
     else:
 
@@ -335,15 +336,14 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                 interm_pt = [temp_x, temp_y, temp_t]
                 e = math.sqrt((temp_x -
                                edge_points[-1][0]) ** 2 + (temp_y - edge_points[-1][1]) ** 2 + (temp_t -
-                                                                                                edge_points[-1][2]) ** 2)
-                # print("e is: ", e)
-                # print(("edge_reso is: ", edge_resolution))
+                                                                                                edge_points[-1][
+                                                                                                    2]) ** 2)
                 edge_points.append(interm_pt)
 
                 closest_pt_index, _ = guiding_path.search(np.array([temp_x, temp_y, temp_t]), 1)
 
                 c = math.sqrt((interm_pt[0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                              (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * e
+                              (interm_pt[1] - guiding_path.tree.data[closest_pt_index][1]) ** 2)
 
                 obstacle_cost = 0
                 if use_obstacle_cost:
@@ -358,9 +358,10 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                                         (temp_x - obst_potential_pt[0]) ** 2)
                             obstacle_cost += obstacle_pot / ((dist + 0.0000001) ** 2)
 
-                cost += c + obstacle_cost
+                c = (c + obstacle_cost) * e
+                cost += (c + obstacle_cost)
         else:
-            print("k is: ", k)
+            # print("k is: ", k)
             temp_x = ((edge_length - edge_resolution) * origin[0][0] + edge_resolution *
                       destination[0][0]) / edge_length
 
@@ -380,8 +381,8 @@ def calculate_discretised_edge_cost(origin, destination, guiding_paths, guiding_
                                                                 destination[0][2]]), 1)
 
             cost += math.sqrt((destination[0][0] - guiding_path.tree.data[closest_pt_index][0]) ** 2 +
-                             (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * (edge_length -
-                                                                                                        edge_resolution)
+                              (destination[0][1] - guiding_path.tree.data[closest_pt_index][1]) ** 2) * (edge_length -
+                                                                                                         edge_resolution)
 
     return cost
 
