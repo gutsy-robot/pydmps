@@ -258,7 +258,7 @@ def calculate_dmp_cost(x, y, motion_x, motion_y, dmp, dmp_vel, obstacles=None, r
             obst_potential_pt = list(p.coords)[0]
             dist = sqrt((y + motion_y - round(obst_potential_pt[1]/reso)) ** 2 +
                         (x + motion_x - round(obst_potential_pt[0]/reso)) ** 2)
-            obstacle_cost += 1000/((dist + 0.0000001) ** 2)
+            obstacle_cost += 2/((dist + 0.0000001) ** 2)
 
     print("obstacle cost is: ", obstacle_cost)
     cost = sqrt((y + motion_y - dmp_y) ** 2 + (x + motion_x - dmp_x) ** 2) + obstacle_cost - \
@@ -388,8 +388,8 @@ def main(sx=20.0, sy=10.0, gx=100.0, gy=100.0,
 
 if __name__ == "__main__":
     x, y = get_trajectory("../csv/data.csv")
-    # x = [i * 10.0 for i in x]
-    # y = [j * 10.0 for j in y]
+    x = [i * 10.0 for i in x]
+    y = [j * 10.0 for j in y]
     print("[INFO]: Read x and y from the csv file")
 
     main(cost_type="dmp_traj", path_x=x, path_y=y)
