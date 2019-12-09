@@ -17,7 +17,7 @@ Dependencies
 2. ros turtlesim simulator
 3. ros turtlesim teleop_key
 
-Make sure that both of these are present on your ROS package path. 2 and 3 are only needed if you wish to
+Make sure that 2 and 3 are present on your ROS package path. 2 and 3 are only needed if you wish to
 record new actions. I have already provided an example action in the csv subdirectory in data.csv. If you
 record a new 2D action, just create a csv file in the similar fashion.
 
