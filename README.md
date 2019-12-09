@@ -3,8 +3,7 @@ pydmps
 
 This is a fork from the following repo: 
 
-    http://studywolf.wordpress.com/category/robotics/dynamic-movement-primitive/
-
+    https://github.com/studywolf/pydmps
 which has the python implementation of Dynamic Motion Primitives. This repo builds on top of this functionality.
 Here, I have tried some methods by which the path given by a dynamic motion primitive can be further adapted online 
 to make it feasible in the given new workspace.
