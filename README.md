@@ -9,6 +9,12 @@ which has the python implementation of Dynamic Motion Primitives. This repo buil
 Here, I have tried some methods by which the path given by a dynamic motion primitive can be further adapted online 
 to make it feasible in the given new workspace.
 
+Installation
+----
+ 
+Inside the base directory, do:
+    
+        python setup.py install
 
 Dependencies
 -----------
