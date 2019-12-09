@@ -7,7 +7,8 @@ from shapely.geometry import Point, mapping
 from math import sqrt, ceil, floor
 from utils import get_trajectory, check_collision, avoid_obstacles, sample_dmp_normal, sample_uniform, ind_max
 from dmp_discrete import DMPs_discrete
-from kdtree import Node, KDTree
+from dynamic_kdtree import Node
+from dynamic_kdtree import KDTree as DynamicKDTree
 from union_find import UF
 from ucb import UCB
 from mpl_toolkits.mplot3d import axes3d
@@ -89,7 +90,7 @@ def get_state_reward(x, y, t, guiding_paths=None, weights=[1.0], obstacles=None)
     return 1/cost_total
 
 
-def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
+def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=30,
          reward_weights={'connectivity': 0.01, 'increemental': 1.0}, guiding_path_weights=[1.0],
          ucb=None, uniform_only=False, normal_only=False):
 
@@ -126,7 +127,7 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     print("min for uniform distribution is: ", (dmp_x_min, dmp_y_min, dmp_t_min))
     print("max for uniform distribution is: ", (dmp_x_max, dmp_y_max, dmp_t_max))
 
-    tree = KDTree()
+    tree = DynamicKDTree()
     tree.add(start.points[0][0], start.points[0][1])
     tree.add(goal.points[0][0], goal.points[0][1])
 
@@ -194,18 +195,9 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
                              obstacles=obstacles)
 
         increemental_reward.append(reward)
-        # prev_count = None
-        # prev_id = None
+
         # ensures whether the sampled state is feasible.
         if reward > 0 or reward_weights['connectivity'] > 0.0:
-
-            # if arm == 0:
-            #     if ucb is not None:
-            #         plt2d.plot(x, y, marker="+", color='b', markersize=2.0)
-            #
-            # elif arm == 1:
-            #     if ucb is not None:
-            #         plt2d.plot(x, y, marker="+", color='r', markersize=2.0)
 
             # add the 2D node to the union find object
             edges = []
@@ -293,14 +285,25 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
 
         if ucb is not None:
             ucb.update(arm, reward)
+            if arm == 0:
+                prev_arm1_mean = mean2[-1]
+                if ucb.values[1] != prev_arm1_mean:
+                    print("value even when arm1 was not selected...")
+
+                elif arm == 1:
+                    prev_arm0_mean = mean1[-1]
+                    if ucb.values[0] != prev_arm0_mean:
+                        print("value even when arm0 was not selected...")
             mean1.append(ucb.values[0])
             mean2.append(ucb.values[1])
 
     print("length of roadmap is: ", len(roadmap))
 
     if ucb is not None:
-        plt_mean_reward.plot(mean1, 'bo', label='uniform')
-        plt_mean_reward.plot(mean2, 'r+', label='dmp_normal')
+        print("length of mean1 is: ", len(mean1))
+        print("length of ucb1 is: ", len(ucb1))
+        plt_mean_reward.plot(mean1, label='uniform')
+        plt_mean_reward.plot(mean2, label='dmp_normal')
         plt_mean_reward.legend()
 
         plt_reward.plot(increemental_reward, label='increemental')
@@ -328,6 +331,10 @@ def plan(start, goal, guiding_paths, obstacles, v_max, v_min, num_points=3000,
     elif normal_only:
         plt_connected.plot(conn_comp_arr, label='normal')
 
+    print("mean is: ", mean1)
+    print("mean is: ", mean2)
+    print("ucb1 is: ", ucb1)
+    print("ucb2 is: ", ucb2)
     return vertices, roadmap, ucb, edge_resolution
 
 
@@ -431,12 +438,6 @@ def dijkstra_planning(start, goal, road_map, vertices, guiding_paths=None, guidi
         rx.append(n.points[0][0][0])
         ry.append(n.points[0][0][1])
         rt.append(n.points[0][0][2])
-        # if plotted_once is not True:
-        #     circle = plt.Circle((n.points[0][0][0], n.points[0][0][1]), dist_plotting, linestyle='--',
-        #                         linewidth=0.5, color='b', fill=False)
-        #     # plt.Circle((n.points[0][0][0], n.points[0][0][1]), d)
-        #     plt2d.add_patch(circle)
-        #     plotted_once = True
 
         pind = n.points[0][1][2]
 
@@ -642,46 +643,46 @@ def main(path_x=None, path_y=None):
 
     rx, ry, rt = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para], dmp_vel=dmp_dy_time_para)
 
-    rx_uniform, ry_uniform, rt_uniform = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
-                                                      dmp_vel=dmp_dy_time_para, use_ucb=False, uniform_only=True)
-
-    rx_normal, ry_normal, rt_normal = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
-                                                   dmp_vel=dmp_dy_time_para, use_ucb=False, normal_only=True)
+    # rx_uniform, ry_uniform, rt_uniform = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
+    #                                                   dmp_vel=dmp_dy_time_para, use_ucb=False, uniform_only=True)
+    #
+    # rx_normal, ry_normal, rt_normal = PRM_planning(sx, sy, gx, gy, obstacles, guiding_paths=[dmp_time_para],
+    #                                                dmp_vel=dmp_dy_time_para, use_ucb=False, normal_only=True)
     rx = np.array(rx)
     ry = np.array(ry)
     rt = np.array([rt])
     print("shape of rx is: ", rx.shape)
     print("rt is: ", rt)
 
-    rx_uniform = np.array(rx_uniform)
-    ry_uniform = np.array(ry_uniform)
-    rt_uniform = np.array([rt_uniform])
-
-    print("rt uniform is: ", rt_uniform)
-
-    rx_normal = np.array(rx_normal)
-    ry_normal = np.array(ry_normal)
-    rt_normal = np.array([rt_normal])
-
-    print("rt uniform is: ", rt_normal)
+    # rx_uniform = np.array(rx_uniform)
+    # ry_uniform = np.array(ry_uniform)
+    # rt_uniform = np.array([rt_uniform])
+    #
+    # print("rt uniform is: ", rt_uniform)
+    #
+    # rx_normal = np.array(rx_normal)
+    # ry_normal = np.array(ry_normal)
+    # rt_normal = np.array([rt_normal])
+    #
+    # print("rt uniform is: ", rt_normal)
 
     plot = ax.plot_wireframe(rx, ry, rt, color='k', label='ucb')
     # plot_paths.append(plot)
     # legend_key.append('ucb3D')
 
-    plot = ax.plot_wireframe(rx_uniform, ry_uniform, rt_uniform, color='c', label='uniform')
-    # plot_paths.append(plot)
-    # legend_key.append('uniform3D')
-
-    plot = ax.plot_wireframe(rx_normal, ry_normal, rt_normal, color='m', label='normal')
-    # plot_paths.append(plot)
+    # plot = ax.plot_wireframe(rx_uniform, ry_uniform, rt_uniform, color='c', label='uniform')
+    # # plot_paths.append(plot)
+    # # legend_key.append('uniform3D')
+    #
+    # plot = ax.plot_wireframe(rx_normal, ry_normal, rt_normal, color='m', label='normal')
+    # # plot_paths.append(plot)
     # legend_key.append('normal3D')
 
     # plt.legend(plot_paths, legend_key, loc='lower right')
     ax.legend()
     plt2d.plot(rx, ry, color='k', label='ucb path')
-    plt2d.plot(rx_uniform, ry_uniform, color='c', label='uniform path')
-    plt2d.plot(rx_normal, ry_normal, color='m', label='normal path')
+    # plt2d.plot(rx_uniform, ry_uniform, color='c', label='uniform path')
+    # plt2d.plot(rx_normal, ry_normal, color='m', label='normal path')
     plt2d.legend()
     plt_connected.legend()
     plt.show()

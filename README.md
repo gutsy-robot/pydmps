@@ -1,25 +1,33 @@
 pydmps
 ======
 
-The original repository is a Python implementation of DMPs, with accompanying tutorials and applications that can be found at http://studywolf.wordpress.com/category/robotics/dynamic-movement-primitive/
+This is a fork from the following repo: 
 
-This is a ROS package built on top of the original repo to quickly record trajectories on a turtlesim simulator and then visualise the DMP under different number of basis functions,
+    http://studywolf.wordpress.com/category/robotics/dynamic-movement-primitive/
 
+which has the python implementation of Dynamic Motion Primitives. This repo builds on top of this functionality.
+Here, I have tried some methods by which the path given by a dynamic motion primitive can be further adapted online 
+to make it feasible in the given new workspace.
 
 
 Dependencies
 -----------
 
+1. shapely (can be installed with pip)
+2. ros turtlesim simulator
+3. ros turtlesim teleop_key
 
-1. ros turtlesim simulator
-2. ros turtlesim teleop_key
-
-Make sure that both of these are present on your ROS package path.
+Make sure that both of these are present on your ROS package path. 2 and 3 are only needed if you wish to
+record new actions. I have already provided an example action in the csv subdirectory in data.csv. If you
+record a new 2D action, just create a csv file in the similar fashion.
 
 
 
 Running the demo
 ----------------
+
+Recording a new Action Replicating it with DMP
+-----
 
     roslauch pydmps record_trajectory.launch
     
@@ -39,3 +47,12 @@ Once you're done, go to the pydmps directory inside the package and do:
        
        
 You should now be able to see the DMPs with the different number of basis alongside the original path.
+
+
+Working with the example action 
+----
+
+
+For this the best way is to use the jupyter notebook given in the repo, which is quite self-explainatory. 
+In the notebook, I have given some additional basic actions like moving in a straight line as well. The cells starting
+from the 3D grid search are not fully updated right now, but eveything before that works.
